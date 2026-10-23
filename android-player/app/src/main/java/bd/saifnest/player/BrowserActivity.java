@@ -112,6 +112,9 @@ public final class BrowserActivity extends Activity {
         web = new WebView(this); web.setBackgroundColor(BG);
         web.getSettings().setJavaScriptEnabled(true); web.getSettings().setDomStorageEnabled(true);
         web.getSettings().setMediaPlaybackRequiresUserGesture(true); web.getSettings().setLoadsImagesAutomatically(true);
+        web.getSettings().setSupportMultipleWindows(false);
+        CookieManager.getInstance().setAcceptCookie(true);
+        if (android.os.Build.VERSION.SDK_INT >= 21) CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
         web.setWebChromeClient(new WebChromeClient());
         web.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -127,8 +130,12 @@ public final class BrowserActivity extends Activity {
                 String js = "(function(){var a=[];function add(u){if(u&&a.indexOf(u)<0)a.push(u)};" +
                         "document.querySelectorAll('video,audio,video source,audio source,source').forEach(function(e){add(e.currentSrc||e.src||e.getAttribute('src'))});" +
                         "performance.getEntriesByType('resource').forEach(function(e){if(/\\.(mp4|m4v|webm|mov|mkv|mp3|m4a|aac|ogg|opus|m3u8|mpd)(?:$|[?#])/i.test(e.name)||/videoplayback|\\/media\\//i.test(e.name))add(e.name)});" +
-                        "document.querySelectorAll('meta[property=\'og:video\'],meta[name=\'twitter:player:stream\'],link[rel=\'preload\'][as=\'video\']').forEach(function(e){add(e.content||e.href)});" +
+                        "document.querySelectorAll(\"meta[property='og:video'],meta[name='twitter:player:stream'],link[rel='preload'][as='video']\").forEach(function(e){add(e.content||e.href)});" +
                         "return JSON.stringify(a)})()";
+                view.evaluateJavascript("(function(){try{window.open=function(){return null};" +
+                        "var css='iframe[src*=\\\"ad\\\"],iframe[id*=\\\"ad\\\"],[class*=\\\"advertisement\\\"],[id*=\\\"advertisement\\\"],[class*=\\\"ad-container\\\"],[id*=\\\"ad-container\\\"],[class*=\\\"popunder\\\"],[id*=\\\"popunder\\\"]{display:none!important;visibility:hidden!important;pointer-events:none!important}';" +
+                        "var s=document.getElementById('saifnest-ad-style');if(!s){s=document.createElement('style');s.id='saifnest-ad-style';s.textContent=css;(document.head||document.documentElement).appendChild(s)}" +
+                        "}catch(e){};return true})()", ignored -> {});
                 view.evaluateJavascript(js, value -> {
                     try {
                         if (value == null || "null".equals(value)) return;
