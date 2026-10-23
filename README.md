@@ -23,7 +23,8 @@ The SaifNest mark combines a connected globe with a flowing metallic-blue ribbon
 
 - **Primary colours:** midnight navy, royal blue, cyan, and silver.
 - **Logo usage:** keep the mark on transparent backgrounds; do not add a solid background to the master asset.
-- **Android launcher:** uses a purpose-built vector icon so it remains crisp at different launcher sizes.
+- **Master logo:** the user-provided `SaifNest.png` is the approved source artwork; do not redraw it as SVG or substitute a generated vector.
+- **Android launcher:** use the approved PNG artwork as the source image, with launcher-safe sizing and background treatment. The PNG must be committed to the repository before launcher integration can be verified.
 - **App name:** SaifNest.
 
 ## Current features
@@ -36,6 +37,7 @@ The SaifNest mark combines a connected globe with a flowing metallic-blue ribbon
 - Heuristic filtering of selected advertising/tracking hosts and paths, popup windows, and some redirect patterns.
 - Media request classification for common video, audio, HLS, and DASH URL patterns.
 - Media library screen for discovered candidates.
+- Persistent local bookmarks and browsing history.
 - Media3/ExoPlayer foundation for compatible media playback.
 
 Feature availability depends on the website, Android/WebView version, and media delivery method. Media detection is best-effort: it does not guarantee that an item can be played or downloaded.
@@ -91,7 +93,8 @@ On Windows, use `gradlew.bat assembleDebug` and `gradlew.bat test`.
 
 - [ ] Verify a clean Android build in CI and on a physical device.
 - [ ] Replace the placeholder tab dialog with real multi-tab management.
-- [ ] Add persistent bookmarks and browsing history.
+- [x] Add persistent bookmarks and browsing history (basic local persistence and open-from-list flows).
+- [ ] Add editable bookmark management, search/filter, and richer history controls.
 - [ ] Build a robust download queue with progress, retry, and resume support when the server supports HTTP Range.
 - [ ] Improve media classification using response MIME types and page context.
 - [ ] Add settings for privacy, downloads, appearance, and default search.
