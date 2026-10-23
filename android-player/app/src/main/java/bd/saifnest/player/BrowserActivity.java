@@ -14,6 +14,7 @@ import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.inputmethod.EditorInfo;
 import android.webkit.WebChromeClient;
+import android.webkit.JavascriptInterface;
 import android.webkit.CookieManager;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebResourceRequest;
@@ -114,6 +115,7 @@ public final class BrowserActivity extends Activity {
         web.getSettings().setJavaScriptEnabled(true); web.getSettings().setDomStorageEnabled(true);
         web.getSettings().setMediaPlaybackRequiresUserGesture(true); web.getSettings().setLoadsImagesAutomatically(true);
         web.getSettings().setSupportMultipleWindows(false);
+        web.addJavascriptInterface(new MediaBridge(), "SaifNestBridge");
         CookieManager.getInstance().setAcceptCookie(true);
         if (android.os.Build.VERSION.SDK_INT >= 21) CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
         web.setWebChromeClient(new WebChromeClient());
@@ -137,6 +139,15 @@ public final class BrowserActivity extends Activity {
                         "var css='iframe[src*=\\\"ad\\\"],iframe[id*=\\\"ad\\\"],[class*=\\\"advertisement\\\"],[id*=\\\"advertisement\\\"],[class*=\\\"ad-container\\\"],[id*=\\\"ad-container\\\"],[class*=\\\"popunder\\\"],[id*=\\\"popunder\\\"]{display:none!important;visibility:hidden!important;pointer-events:none!important}';" +
                         "var s=document.getElementById('saifnest-ad-style');if(!s){s=document.createElement('style');s.id='saifnest-ad-style';s.textContent=css;(document.head||document.documentElement).appendChild(s)}" +
                         "}catch(e){};return true})()", ignored -> {});
+                String observer = "(function(){try{" +
+                        "function scan(){try{document.querySelectorAll('video,audio,video source,audio source').forEach(function(e){" +
+                        "var u=e.currentSrc||e.src||e.getAttribute('src');if(u&&/^https?:\\/\\//i.test(u))SaifNestBridge.found(u,e.tagName==='AUDIO'?'Audio element':'Video element');" +
+                        "});performance.getEntriesByType('resource').forEach(function(e){" +
+                        "if(/^https?:\\/\\//i.test(e.name)&&(/\\.(mp4|m4v|webm|mov|mkv|mp3|m4a|aac|ogg|opus|m3u8|mpd)(?:$|[?#])/i.test(e.name)||/videoplayback|\\/media\\//i.test(e.name)))SaifNestBridge.found(e.name,'Loaded media resource');" +
+                        "}catch(x){}}scan();new MutationObserver(scan).observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['src']});" +
+                        "document.addEventListener('play',function(e){if(e.target&&e.target.tagName==='VIDEO'){var u=e.target.currentSrc||e.target.src;if(u&&/^https?:\\/\\//i.test(u))SaifNestBridge.found(u,'Playing video');}},true);" +
+                        "}catch(e){}})();";
+                view.evaluateJavascript(observer, ignored -> {});
                 view.evaluateJavascript(js, value -> {
                     try {
                         if (value == null || "null".equals(value)) return;
@@ -219,6 +230,14 @@ public final class BrowserActivity extends Activity {
                 || lower.contains("/media/")
                 || lower.contains("mime=video")
                 || lower.contains("contenttype=video");
+    }
+
+    private final class MediaBridge {
+        @JavascriptInterface
+        public void found(String url, String source) {
+            if (url == null || url.length() > 8192 || !isHttp(url)) return;
+            addMedia(url, source == null ? "Page media element" : source);
+        }
     }
 
     private void addMedia(String url, String source) {
