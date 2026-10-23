@@ -12,6 +12,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -138,7 +139,7 @@ public final class MainActivity extends Activity {
 
         TextView headline = text("Your media,\none place.", 30, WHITE, true);
         root.addView(headline, params(-1, -2, 20));
-        TextView subtitle = text("Find videos from a link or explore a public website. Playable files and page links are identified separately.", 14, MUTED, false);
+        TextView subtitle = text("Find public media, play compatible streams and manage your downloads.", 14, MUTED, false);
         root.addView(subtitle, params(-1, -2, 7));
 
         LinearLayout searchPanel = column();
@@ -192,9 +193,9 @@ public final class MainActivity extends Activity {
 
         LinearLayout resultsHeader = new LinearLayout(this);
         resultsHeader.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        TextView resultsTitle = text("Found media", 18, WHITE, true);
+        TextView resultsTitle = text("Media results", 18, WHITE, true);
         resultsHeader.addView(resultsTitle, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView resultsHint = text("LIVE RESULTS", 10, CYAN, true);
+        TextView resultsHint = text("DISCOVERED", 10, CYAN, true);
         resultsHeader.addView(resultsHint);
         root.addView(resultsHeader, params(-1, -2, 12));
 
@@ -206,6 +207,7 @@ public final class MainActivity extends Activity {
         scroll.addView(resultsList);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
         setContentView(root, new ViewGroup.LayoutParams(-1, -1));
+        root.requestApplyInsets();
 
         linkMode.setOnClickListener(v -> {
             singleLinkMode = true;
