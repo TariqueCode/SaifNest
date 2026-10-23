@@ -1,21 +1,118 @@
-# SaifNest Native Android App
+# SaifNest
 
-The production target is a standalone native Android application. The installed app must not require Termux, Python, Flask, Node.js, or a user-managed server.
+<p align="center">
+  <img src="android-player/app/src/main/res/drawable/saifnest_logo.svg" alt="SaifNest logo" width="180" />
+</p>
 
-## Current foundation
-- Native Android Media3/ExoPlayer starter under `android-player/`.
-- GitHub Actions Android debug APK workflow.
-- Native architecture and phased migration documented in [NATIVE-ANDROID-PLAN.md](NATIVE-ANDROID-PLAN.md).
-- Premium app mark source at `android-player/app/src/main/res/drawable/saifnest_logo.svg` (vector source of truth). A PNG master design was generated separately; the SVG here is a scalable native project asset.
+<p align="center"><strong>A modern Android browser with built-in media discovery.</strong></p>
+
+<p align="center">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white" />
+  <img alt="Language" src="https://img.shields.io/badge/language-Java%20%2B%20Android-3B82F6" />
+  <img alt="Version" src="https://img.shields.io/badge/version-0.2.0-06B6D4" />
+  <img alt="Status" src="https://img.shields.io/badge/status-in%20development-orange" />
+</p>
+
+SaifNest is an Android-first browser project focused on a clean browsing experience, privacy-conscious content filtering, and convenient discovery of media requests made by pages. The interface uses a deep navy, electric blue, cyan, and silver visual language.
+
+> **Project status:** Active development. The current branch contains an early browser UI and media-detection/player foundation. It is not yet a production-ready browser. Build and device testing must pass before a release can be considered complete.
+
+## Brand identity
+
+The SaifNest mark combines a connected globe with a flowing metallic-blue ribbon. It represents connected browsing, speed, and a single home for web content.
+
+- **Primary colours:** midnight navy, royal blue, cyan, and silver.
+- **Logo usage:** keep the mark on transparent backgrounds; do not add a solid background to the master asset.
+- **Android launcher:** uses a purpose-built vector icon so it remains crisp at different launcher sizes.
+- **App name:** SaifNest.
+
+## Current features
+
+- Native Android application shell with a redesigned browser home screen.
+- Address/search bar for entering URLs or search terms.
+- WebView-based page rendering and browser navigation.
+- Quick links for commonly used sites.
+- Browser tools menu with page reload, home, share/copy URL, find-in-page, desktop-site toggle, cache clearing, and an ad-shield toggle.
+- Heuristic filtering of selected advertising/tracking hosts and paths, popup windows, and some redirect patterns.
+- Media request classification for common video, audio, HLS, and DASH URL patterns.
+- Media library screen for discovered candidates.
+- Media3/ExoPlayer foundation for compatible media playback.
+
+Feature availability depends on the website, Android/WebView version, and media delivery method. Media detection is best-effort: it does not guarantee that an item can be played or downloaded.
+
+## Technology
+
+- Java and Android SDK
+- Android WebView
+- AndroidX Media3 / ExoPlayer (HLS and DASH modules included)
+- OkHttp
+- Jsoup
+- GitHub Actions workflow support (where configured)
+
+## Repository layout
+
+```text
+SaifNest/
+├── README.md
+├── NATIVE-ANDROID-PLAN.md
+└── android-player/
+    └── app/
+        └── src/main/
+            ├── AndroidManifest.xml
+            ├── java/bd/saifnest/player/
+            │   ├── BrowserActivity.java
+            │   ├── MediaDetectionEngine.java
+            │   ├── MediaLibraryActivity.java
+            │   ├── PlayerActivity.java
+            │   └── SharedMediaStore.java
+            └── res/
+                ├── drawable/
+                └── mipmap*/
+```
+
+## Development setup
+
+1. Install a compatible JDK and Android SDK.
+2. Open the `android-player/` project in Android Studio, or use the repository's configured Gradle wrapper if available.
+3. Allow Gradle to resolve the Android Gradle Plugin and dependencies.
+4. Build the debug variant and install it on a test device.
+5. Test navigation, permissions, media playback, and filtering against sites you are authorized to access.
+
+Typical Gradle commands (run from the Android project root when the wrapper is present):
+
+```bash
+./gradlew assembleDebug
+./gradlew test
+```
+
+On Windows, use `gradlew.bat assembleDebug` and `gradlew.bat test`.
 
 ## Roadmap
-1. Build a native Jetpack Compose application shell and branding.
-2. Implement sitemap/HTML crawling, pagination, URL normalization, deduplication and persistent scan sessions in Kotlin.
-3. Add WebView-based media request observation for JavaScript-heavy sites, with clear limitations.
-4. Implement Room-backed download queue, retries, and resume when HTTP Range is supported.
-5. Integrate detected media with Media3 playback.
-6. Add Bengali/English strings, tests, Android permission/storage review, and signed release setup.
 
-All scanning must respect site access controls and rate limits. The app must not bypass DRM, authentication, paywalls, or CAPTCHA. A detected request is not proof that the media is downloadable.
+- [ ] Verify a clean Android build in CI and on a physical device.
+- [ ] Replace the placeholder tab dialog with real multi-tab management.
+- [ ] Add persistent bookmarks and browsing history.
+- [ ] Build a robust download queue with progress, retry, and resume support when the server supports HTTP Range.
+- [ ] Improve media classification using response MIME types and page context.
+- [ ] Add settings for privacy, downloads, appearance, and default search.
+- [ ] Add automated tests for URL normalization, media classification, and filtering rules.
+- [ ] Review accessibility, translations (Bengali/English), storage behavior, and Android version compatibility.
+- [ ] Prepare signing, release notes, privacy disclosure, and release build verification.
 
-A phase is complete only after code, tests, CI build evidence, and documented limitations exist. The present player is a starter, not a finished full app.
+## Privacy, safety, and limitations
+
+- The browser loads third-party websites; those websites may collect data under their own policies.
+- Filtering is heuristic and cannot guarantee that all ads, trackers, popups, or anti-adblock scripts will be blocked.
+- WebView behavior differs from full desktop browsers. Some sites may require unsupported APIs, browser extensions, DRM, or specific codecs.
+- DRM-protected streams, authentication controls, paywalls, CAPTCHA, and other access restrictions are not bypassed.
+- Only access, play, or download content when you have permission and the site's terms allow it.
+- A media URL appearing in the library is a detected candidate, not proof of a downloadable file.
+- Do not put passwords, signing keys, API secrets, or personal tokens in source control.
+
+## Contributing
+
+Work on the active development branch, keep changes focused, and include build/test evidence with feature changes. Document any known limitations instead of describing incomplete functionality as finished.
+
+## License
+
+No license has been declared for this repository yet. Until a license is added, all rights remain with the copyright holder; do not assume the code is open for reuse.
