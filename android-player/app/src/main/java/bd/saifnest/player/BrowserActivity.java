@@ -274,12 +274,7 @@ public final class BrowserActivity extends Activity {
     }
 
     private boolean looksLikeMedia(String url) {
-        String lower = url.toLowerCase(Locale.ROOT);
-        return MEDIA.matcher(lower).find()
-                || lower.contains("videoplayback")
-                || lower.contains("/media/")
-                || lower.contains("mime=video")
-                || lower.contains("contenttype=video");
+        return MediaDetectionEngine.looksLikeMedia(url);
     }
 
     private final class MediaBridge {
@@ -291,13 +286,17 @@ public final class BrowserActivity extends Activity {
     }
 
     private void addMedia(String url, String source) {
-        if (!isHttp(url) || !found.add(url)) return;
-        SharedMediaStore.add(url, source, web == null ? "" : String.valueOf(web.getUrl()));
+        if (!isHttp(url)) return;
+        MediaDetectionEngine.Candidate candidate = MediaDetectionEngine.inspect(url, "", source);
+        if (candidate == null || !found.add(candidate.identity)) return;
+        String mediaType = candidate.displayType() + " · " + candidate.confidence + "%";
+        String pageUrl = web == null ? "" : String.valueOf(web.getUrl());
+        SharedMediaStore.add(candidate.url, source, pageUrl);
         runOnUiThread(() -> {
             seq++;
             LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
             card.setPadding(dp(10), dp(8), dp(10), dp(8)); card.setBackground(bg(PANEL, 12, Color.rgb(35,52,78)));
-            TextView name = label(String.format(Locale.US, "%02d  ·  %s", seq, source), 11, CYAN, true); card.addView(name);
+            TextView name = label(String.format(Locale.US, "%02d  ·  %s", seq, mediaType), 11, CYAN, true); card.addView(name);
             TextView link = label(url, 11, WHITE, false); link.setMaxLines(2); link.setTextIsSelectable(true); card.addView(link, lp(-1,-2,4));
             LinearLayout actions = new LinearLayout(this);
             Button play = button("▶ Play", true), download = button("↓ Download", false);
