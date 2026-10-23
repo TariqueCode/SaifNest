@@ -5,7 +5,6 @@ The Android module is the start of a standalone native application. The installe
 ## Current scope
 - Native Android launch screen with HTTP(S) media-link entry.
 - Media3/ExoPlayer playback starter.
-- Scalable brand artwork in `app/src/main/assets/saifnest_logo.svg`.
 - GitHub Actions debug APK workflow.
 
 ## Build
