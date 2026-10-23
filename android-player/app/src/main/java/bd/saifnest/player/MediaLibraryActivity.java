@@ -97,7 +97,10 @@ public final class MediaLibraryActivity extends Activity {
             String file = Uri.parse(item.url).getLastPathSegment();
             if (file == null || file.trim().isEmpty()) file = "saifnest-" + System.currentTimeMillis() + ".mp4";
             DownloadManager.Request req = new DownloadManager.Request(Uri.parse(item.url));
+            file = file.replaceAll("[\\\\/:*?\"<>|]", "_");
             req.setTitle(file); req.setDescription("SaifNest browser download");
+            String userAgent = System.getProperty("http.agent");
+            if (userAgent != null && !userAgent.isEmpty()) req.addRequestHeader("User-Agent", userAgent);
             req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             req.setAllowedOverMetered(true); req.setAllowedOverRoaming(false);
             String cookie = CookieManager.getInstance().getCookie(item.url);
