@@ -1,0 +1,53 @@
+name: Import SaifNest source bundle
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'source-bundle.zip'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-source:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.added, 'source-bundle.zip') || contains(github.event.head_commit.modified, 'source-bundle.zip') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate bundle
+        run: |
+          test -f source-bundle.zip || { echo 'source-bundle.zip was not found'; exit 1; }
+          unzip -t source-bundle.zip
+      - name: Extract and import project files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/saifnest-unpacked"
+          unzip -q source-bundle.zip -d "$RUNNER_TEMP/saifnest-unpacked"
+          APP_FILE="$(find "$RUNNER_TEMP/saifnest-unpacked" -type f -name app.py -print -quit)"
+          if [ -z "$APP_FILE" ]; then
+            echo 'Bundle does not contain app.py; refusing to import.'
+            exit 1
+          fi
+          SOURCE_ROOT="$(dirname "$APP_FILE")"
+          cp -a "$SOURCE_ROOT/." .
+          rm -f source-bundle.zip
+          test -f app.py
+          test -f static/app.js
+          test -f templates/index.html
+      - name: Commit imported source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Import complete SaifNest source bundle'
+          git push
