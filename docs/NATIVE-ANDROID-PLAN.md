@@ -2,72 +2,79 @@
 
 ## Product direction
 
-SaifNest is moving from a browser-based/Python prototype to a standalone Android application. The installed app must not require Termux, a separately installed Python runtime, Flask, Node.js, or a user-managed server.
+SaifNest is a standalone Android app. The installed app must not require Termux, Python, Flask, Node.js, or a user-managed server. The existing web prototype is reference material, not the final runtime architecture.
 
-The existing web prototype and its proven extraction behavior are reference material for feature parity, not the runtime architecture for the final Android product.
+Detailed user-visible behavior and acceptance criteria are defined in [Video Library and Download Specification](VIDEO-LIBRARY-DOWNLOAD-SPEC.md).
 
 ## Target stack
 
-- Kotlin for application, scanner, networking, and download orchestration.
+- Kotlin for app, scanner, networking, and download orchestration.
 - Jetpack Compose + Material 3 for the native interface.
 - AndroidX Media3 / ExoPlayer for playback.
-- Android WebView (Chromium) as a site-rendering and request-observation fallback for sites that require JavaScript.
-- OkHttp + Kotlin Coroutines for HTTP operations and concurrency.
+- Android WebView (Chromium) as an observation fallback for JavaScript-heavy public pages.
+- OkHttp + Kotlin Coroutines for HTTP operations and bounded concurrency.
 - Jsoup for HTML parsing and link discovery.
-- Room for durable inventory, scan sessions, and download queue metadata.
-- DataStore for preferences.
-- WorkManager for deferrable/recoverable work; a user-visible foreground service is required for long-running user-initiated transfers where Android policy requires it.
-- GitHub Actions for lint, unit tests, and APK assembly.
+- Room for durable inventory, scan sessions, deduplication and download queue metadata.
+- DataStore for preferences and app-lock settings.
+- WorkManager for deferrable/recoverable work; foreground service/notifications for long user-initiated transfers when required by Android policy.
+- GitHub Actions for lint, unit tests, APK assembly and artifact upload.
 
 ## Core modules
 
-1. **app** — Compose navigation, dashboard, settings, permissions, theme and localization.
-2. **scanner** — sitemap discovery, same-host crawl, pagination strategies, URL normalization, deduplication, bounded concurrency, cancellation, pause/resume, and progress events.
-3. **media-detection** — page parsing plus WebView/Chromium request observation for media candidates; captures MIME type, URL, referer context when available, and detection source.
-4. **downloads** — queue, retry policy, resumable HTTP downloads when servers support byte ranges, progress, storage destination, and failure reasons.
-5. **player** — Media3 playback, fullscreen/orientation, seek, speed, subtitle/audio-track selection when supported, and playback error reporting.
-6. **data** — Room entities/DAOs and DataStore preferences.
-7. **testing** — unit tests for URL normalization, same-host rules, pagination, deduplication, queue transitions, and scanner cancellation.
+1. **app** — Compose navigation, dashboard, library, settings, permissions, themes, Bengali/English localization and optional app lock.
+2. **scanner** — sitemap discovery, same-host crawl, pagination, URL normalization, deduplication, bounded concurrency, cancellation, pause/resume and progress events.
+3. **media-detection** — HTML/media metadata parsing plus WebView/Chromium observation; records MIME type, candidate URL, source page and verification status.
+4. **library** — site-based collections, persistent item identity, new/seen/downloaded filters, and opt-in site refresh.
+5. **downloads** — durable queue, safe filenames, retry, cancellation, progress, HTTP Range resume and verified parallel byte-range transfers when supported.
+6. **player** — Media3 playback, fullscreen/orientation, seek, speed, supported subtitle/audio-track selection and useful error reporting.
+7. **data** — Room entities/DAOs and DataStore preferences.
+8. **testing** — URL normalization, same-host rules, sitemap/pagination, deduplication, range-download correctness, queue recovery, app-lock and cancellation tests.
 
 ## Product requirements
 
-- Results appear incrementally; users can open or queue a detected item while a scan continues.
-- The scanner must have configurable page limits and concurrency, with visible estimated versus exact counts.
-- Pause, resume, and cancel must be real operations, not just UI states.
-- Downloads must survive process death where the Android platform and remote server allow it; unsupported resume must restart safely and be reported honestly.
-- Use app-private storage by default and Android's Storage Access Framework/MediaStore for user-selected destinations.
-- Keep all scanning within user-selected sites and normal public access. Do not bypass authentication, paywalls, DRM, CAPTCHA, or other access controls. Respect site policies and rate limits.
-- Never promise that every website, encrypted stream, DRM-protected item, or custom player can be extracted or downloaded.
-- Do not embed server secrets or private API keys in the APK.
+- Single-link mode resolves a pasted page/direct-media URL and displays results incrementally. Each candidate offers Play and Download when supported.
+- Website mode reports pages visited, video pages, media candidates, verified direct files, duplicates skipped, failures, and exact/estimated count status separately.
+- The user can select one, a chosen number (for example 100), or all eligible items. Discovered videos go to the library first; downloading remains optional.
+- A site-based library remembers previously imported/downloaded items. Re-scans prioritize new videos and show skipped duplicate counts; users can explicitly show duplicates or rescan.
+- Optional recurring checks can add new public videos to a site's collection. Automatic downloading is a separate opt-in with limits and storage/network controls. Do not promise real-time monitoring if Android has suspended the app.
+- Results appear while scanning continues. Pause, resume and cancel must stop or continue real work, not just change labels.
+- The download queue survives process death where possible. Resume only when server range/validator behavior is safe. Parallel segments are used only after byte-range support and consistent object length are verified; otherwise use a normal streaming download.
+- HLS/DASH manifests use a manifest-aware download path, not raw MP4 byte splitting. Do not bypass authentication, paywalls, DRM, CAPTCHA, signed access controls, or other restrictions.
+- Use app-managed storage by default and Android's Storage Access Framework/MediaStore for export.
+- Optional PIN/password and biometric app lock must not store plaintext credentials. App lock does not imply exported files are encrypted.
+- Do not embed server secrets or private API keys in the APK, and do not claim every website or player is supported.
 
 ## Migration strategy
 
-### Phase 1 — Buildable native foundation
-Keep the current Media3 player starter, add the native app shell, Gradle dependencies, package structure, CI build and artifact upload. Establish a repeatable debug APK build before adding more modules.
+### Phase 1 — Native foundation and reproducible CI
+Keep the Media3 starter, native app shell, Gradle dependencies, package structure and GitHub Actions. Confirm a repeatable debug APK build before calling it build-ready.
 
-### Phase 2 — Local inventory and native scanning
-Implement URL validation, sitemap and HTML discovery, pagination strategies, deduplication, Room persistence, scan controls, and unit tests.
+### Phase 2 — Inventory and scanner
+Implement URL validation, direct-file detection, sitemap discovery, same-host crawl, pagination, persistent Room inventory, duplicate suppression, scan controls and tests.
 
-### Phase 3 — Live media detection
-Add the WebView-based observation layer for JavaScript-heavy sites, normalize media candidates, and stream results to the UI while scanning. Do not treat a request URL as proof that it is downloadable.
+### Phase 3 — JavaScript-heavy site detection
+Add WebView-based observation for eligible HTTP(S) requests, correlate candidates with source pages, verify candidates conservatively, and stream results into the library. WebView cannot expose every resource type or guarantee an extractable direct URL.
 
-### Phase 4 — Download manager
-Add a persistent queue, safe file naming, progress, retry, cancellation, resume support when HTTP Range is available, and foreground notification behavior appropriate to the Android version.
+### Phase 4 — Library and new-item refresh
+Add site collections, selected-item workflows, “new only” views, persisted identity, rescan/duplicate controls, and opt-in recurring checks with last-check status.
 
-### Phase 5 — Playback and polish
-Integrate detected URLs with Media3, improve player controls, add Bengali/English strings, accessibility, empty/error/loading states, and device testing.
+### Phase 5 — Durable download manager
+Add per-item and bulk queues, progress/speed/ETA where meaningful, pause/cancel/retry, restart recovery, HTTP Range resume, guarded parallel range transfers, safe merging, storage controls and notifications.
 
-### Phase 6 — Release readiness
-Run lint, unit tests, debug APK build, install smoke tests on real Android devices, permission/storage review, privacy review, and signed release configuration. Release signing credentials must be stored in GitHub Actions secrets and never committed.
+### Phase 6 — Player, app lock and polish
+Integrate library/local playback, fullscreen and playback controls, optional secure app lock, Bengali/English strings, accessibility, error states and device testing.
 
-## Definition of done for each phase
+### Phase 7 — Release readiness
+Run lint, unit tests, debug APK build, install smoke tests on real Android devices, storage/privacy review, and signed release configuration. Store signing credentials in GitHub Actions secrets only.
 
-- Code is committed to GitHub.
-- CI build and relevant tests pass.
+## Definition of done
+
+- Code and relevant tests are committed to GitHub.
+- CI and relevant tests pass.
 - Limitations and test evidence are recorded.
 - A downloadable APK artifact is produced when the build succeeds.
 - No feature is described as complete merely because placeholder UI exists.
 
-## Current status
+## Current status (2026-10-23)
 
-The repository currently contains an initial Media3 player starter and a GitHub Actions build workflow. This is not yet the complete native SaifNest application. The previous Python/Flask project source must be treated as a behavior reference and migrated module by module; the native Android app should not launch or depend on that web server.
+The repository contains an early Java-based native UI, a basic same-host HTML/media candidate scanner, and a Media3 player starter. It is a prototype, not the complete product. Durable Room inventory, sitemap/pagination discovery, JavaScript request observation, deduplication across scans, download queue, safe parallel downloads, app lock, and real-device validation remain to be implemented and verified. The original transparent PNG logo must be used as supplied; do not redraw or convert it to SVG.
