@@ -28,6 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/saifnest-unpacked"
+          cp README.md "$RUNNER_TEMP/README.md"
           unzip -q source-bundle.zip -d "$RUNNER_TEMP/saifnest-unpacked"
           APP_FILE="$(find "$RUNNER_TEMP/saifnest-unpacked" -type f -name app.py -print -quit)"
           if [ -z "$APP_FILE" ]; then
@@ -36,6 +37,13 @@ jobs:
           fi
           SOURCE_ROOT="$(dirname "$APP_FILE")"
           cp -a "$SOURCE_ROOT/." .
+          # Keep repository setup instructions and ensure browser discovery dependency is installed.
+          cp "$RUNNER_TEMP/README.md" README.md
+          cat > requirements.txt <<'EOF'
+Flask>=3.0,<4.0
+yt-dlp>=2025.1.0
+playwright>=1.48.0
+EOF
           rm -f source-bundle.zip
           test -f app.py
           test -f static/app.js
