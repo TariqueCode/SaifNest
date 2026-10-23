@@ -1,7 +1,7 @@
 # SaifNest
 
 <p align="center">
-  <img src="android-player/app/src/main/res/drawable/saifnest_logo.svg" alt="SaifNest logo" width="180" />
+  <img src="android-player/app/src/main/res/drawable/SaifNest-Logo.png" alt="SaifNest logo" width="180" />
 </p>
 
 <p align="center"><strong>A modern Android browser with built-in media discovery.</strong></p>
