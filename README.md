@@ -14,6 +14,18 @@ SaifNest is a local-first website media discovery and download helper with a Fla
 - Optional Android Media3/ExoPlayer companion launch through the `saifnest://play?url=...` deep link.
 - Public HTTP(S) URL validation that blocks localhost/private network targets.
 
+## One-time source import
+
+The repository has an import workflow so you do not need to copy every source file one by one.
+
+1. Download the complete source bundle attached in the ChatGPT conversation: `SaifNest-v5.2-Complete.zip`.
+2. On GitHub, open **Add file → Upload files**.
+3. Upload that archive and rename the uploaded file exactly to **`source-bundle.zip`** in the repository root. (If GitHub's upload screen doesn't permit renaming during upload, upload it with that name from your device's file manager.)
+4. Commit the upload to `main`.
+5. Open **Actions → Import SaifNest source bundle**. The workflow validates and extracts the source, commits the files to `main`, and removes the temporary ZIP. It requires the repository setting **Settings → Actions → General → Workflow permissions → Read and write permissions** to allow the workflow's bot to push commits.
+
+The import workflow only imports a bundle containing `app.py`; it will refuse a wrong or incomplete archive. Keep the existing MIT `LICENSE` file.
+
 ## Requirements
 
 - Python 3.10+
@@ -26,7 +38,7 @@ SaifNest is a local-first website media discovery and download helper with a Fla
 ## Run on Termux
 
 1. Install Python and the browser dependencies required by your Termux setup.
-2. Extract this repository and enter the project directory.
+2. Clone or extract the repository and enter the project directory.
 3. Install Python packages:
 
    ```sh
@@ -45,6 +57,10 @@ If the default Android shared-storage download directory is unavailable, set `SA
 ## Android companion
 
 The `android-player/` directory contains a separate Media3/ExoPlayer starter. See [android-player/README.md](android-player/README.md). The WebUI deep link does not install the Android companion automatically.
+
+## GitHub Actions
+
+The CI workflow checks Python/JavaScript syntax and builds the native Android player. The Android debug APK is uploaded as a workflow artifact named `saifnest-player-debug-apk`. Start a build from **Actions → SaifNest CI and Android Build → Run workflow**, or push changes to `main`.
 
 ## Validation
 
