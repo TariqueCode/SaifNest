@@ -97,7 +97,8 @@ public final class BrowserActivity extends Activity {
         Button back = button("‹", false); head.addView(back, new LinearLayout.LayoutParams(dp(46), dp(44)));
         TextView title = label("SaifNest Browser", 20, CYAN, true);
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, -2, 1); tp.leftMargin = dp(10); head.addView(title, tp);
-        Button refresh = button("↻", false); head.addView(refresh, new LinearLayout.LayoutParams(dp(46), dp(44)));
+        Button downloads = button("↓", false); head.addView(downloads, new LinearLayout.LayoutParams(dp(46), dp(44)));
+        Button refresh = button("↻", false); LinearLayout.LayoutParams refreshP = new LinearLayout.LayoutParams(dp(46), dp(44)); refreshP.leftMargin = dp(6); head.addView(refresh, refreshP);
         root.addView(head);
         LinearLayout bar = new LinearLayout(this); bar.setGravity(android.view.Gravity.CENTER_VERTICAL);
         address = new EditText(this); address.setSingleLine(true); address.setTextSize(14); address.setTextColor(WHITE);
@@ -164,7 +165,8 @@ public final class BrowserActivity extends Activity {
         results.addView(mediaList); root.addView(results, lp(-1, dp(150), 6));
         setContentView(root, new ViewGroup.LayoutParams(-1, -1)); root.requestApplyInsets();
 
-        back.setOnClickListener(v -> finish());
+        back.setOnClickListener(v -> { if (web.canGoBack()) web.goBack(); else finish(); });
+        downloads.setOnClickListener(v -> startActivity(new Intent(this, MediaLibraryActivity.class)));
         refresh.setOnClickListener(v -> web.reload());
         go.setOnClickListener(v -> loadAddress());
         address.setOnEditorActionListener((v, action, event) -> {
@@ -173,6 +175,10 @@ public final class BrowserActivity extends Activity {
         });
         String initial = getIntent().getStringExtra("url");
         if (initial != null && isHttp(initial)) { address.setText(initial); web.loadUrl(initial); }
+        else {
+            address.setText("https://www.google.com");
+            web.loadUrl("https://www.google.com");
+        }
     }
 
     private LinearLayout.LayoutParams lp(int w, int h, int top) {
@@ -217,6 +223,7 @@ public final class BrowserActivity extends Activity {
 
     private void addMedia(String url, String source) {
         if (!isHttp(url) || !found.add(url)) return;
+        SharedMediaStore.add(url, source, web == null ? "" : String.valueOf(web.getUrl()));
         runOnUiThread(() -> {
             seq++;
             LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
