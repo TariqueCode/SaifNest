@@ -16,6 +16,7 @@ import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -120,10 +121,11 @@ public final class MainActivity extends Activity {
 
         LinearLayout brandRow = new LinearLayout(this);
         brandRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        TextView mark = text("S", 28, CYAN, true);
-        mark.setGravity(android.view.Gravity.CENTER);
-        mark.setBackground(shape(PANEL_ALT, 12, Color.rgb(38, 75, 105)));
-        brandRow.addView(mark, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        ImageView mark = new ImageView(this);
+        mark.setImageResource(R.drawable.saifnest_logo);
+        mark.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        mark.setContentDescription("SaifNest logo");
+        brandRow.addView(mark, new LinearLayout.LayoutParams(dp(48), dp(48)));
         TextView brand = text("SaifNest", 25, CYAN, true);
         LinearLayout.LayoutParams brandP = new LinearLayout.LayoutParams(-2, -2);
         brandP.leftMargin = dp(10);
