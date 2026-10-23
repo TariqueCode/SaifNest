@@ -281,6 +281,7 @@ public final class BrowserActivity extends Activity {
             }
             @Override public void onPageFinished(WebView view, String url) {
                 address.setText(url); status.setText("Ready · " + blockedCount + " ads blocked");
+                BrowserDataStore.addHistory(BrowserActivity.this, view.getTitle(), url);
                 injectPageTools(view);
                 String scan = "(function(){try{var a=[];function add(u){if(u&&/^https?:\\/\\//i.test(u)&&a.indexOf(u)<0)a.push(u)};" +
                     "document.querySelectorAll('video,audio,video source,audio source,source').forEach(function(e){add(e.currentSrc||e.src||e.getAttribute('src'))});" +
@@ -434,6 +435,9 @@ public final class BrowserActivity extends Activity {
             "▣  Share current page",
             "⧉  Copy page link",
             desktopMode ? "▤  Desktop site: ON" : "▤  Request desktop site",
+            BrowserDataStore.isBookmarked(this, web == null ? "" : String.valueOf(web.getUrl())) ? "★  Remove bookmark" : "☆  Bookmark this page",
+            "▣  Bookmarks",
+            "◷  Browsing history",
             "⌫  Clear browsing cache",
             "↻  Reload page",
             "⌂  Home"
@@ -446,11 +450,35 @@ public final class BrowserActivity extends Activity {
                 case 3: sharePage(); break;
                 case 4: copyPage(); break;
                 case 5: desktopMode=!desktopMode; ensureWebView(); web.getSettings().setUserAgentString(desktopMode ? "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/125.0.0.0 Safari/537.36" : null); if(web!=null) web.reload(); toast(desktopMode?"Desktop mode requested":"Mobile mode requested"); break;
-                case 6: if(web!=null) web.clearCache(true); CookieManager.getInstance().flush(); toast("Browser cache cleared"); break;
-                case 7: if(web!=null) web.reload(); break;
-                case 8: showHome(); break;
+                case 6:
+                    if (web == null || web.getUrl() == null) { toast("Open a page first"); break; }
+                    boolean added = BrowserDataStore.toggleBookmark(this, web.getTitle(), web.getUrl());
+                    toast(added ? "Bookmark saved" : "Bookmark removed");
+                    break;
+                case 7: showBookmarks(); break;
+                case 8: showHistory(); break;
+                case 9: if(web!=null) web.clearCache(true); CookieManager.getInstance().flush(); toast("Browser cache cleared"); break;
+                case 10: if(web!=null) web.reload(); break;
+                case 11: showHome(); break;
             }
         }).show();
+    }
+
+
+    private void showBookmarks() {
+        java.util.List<BrowserDataStore.Entry> entries = BrowserDataStore.getBookmarks(this);
+        if (entries.isEmpty()) { new AlertDialog.Builder(this).setTitle("Bookmarks").setMessage("Your saved pages will appear here. Open a page and choose Tools → Bookmark this page.").setPositiveButton("OK", null).show(); return; }
+        String[] labels = new String[entries.size()];
+        for (int i = 0; i < entries.size(); i++) { BrowserDataStore.Entry e = entries.get(i); labels[i] = e.title + "\n" + e.url; }
+        new AlertDialog.Builder(this).setTitle("Bookmarks · " + entries.size()).setItems(labels, (dialog, which) -> { if (which >= 0 && which < entries.size()) loadUrl(entries.get(which).url); }).setNegativeButton("Close", null).show();
+    }
+
+    private void showHistory() {
+        java.util.List<BrowserDataStore.Entry> entries = BrowserDataStore.getHistory(this);
+        if (entries.isEmpty()) { new AlertDialog.Builder(this).setTitle("Browsing history").setMessage("Pages you visit will appear here.").setPositiveButton("OK", null).show(); return; }
+        String[] labels = new String[entries.size()];
+        for (int i = 0; i < entries.size(); i++) { BrowserDataStore.Entry e = entries.get(i); labels[i] = e.title + "\n" + e.url; }
+        new AlertDialog.Builder(this).setTitle("History · " + entries.size()).setItems(labels, (dialog, which) -> { if (which >= 0 && which < entries.size()) loadUrl(entries.get(which).url); }).setNeutralButton("Clear history", (dialog, which) -> { new AlertDialog.Builder(this).setTitle("Clear browsing history?").setMessage("This removes locally stored page visit records.").setNegativeButton("Cancel", null).setPositiveButton("Clear", (d, w) -> { BrowserDataStore.clearHistory(this); toast("Browsing history cleared"); }).show(); }).setNegativeButton("Close", null).show();
     }
 
     private void sharePage() {
