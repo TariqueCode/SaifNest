@@ -1,136 +1,248 @@
 package bd.saifnest.player;
 
 import android.app.Activity;
+import android.app.DownloadManager;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
+import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
 
-/** Native URL resolver/site scanner prototype with live, actionable result cards. */
+/** Native SaifNest discovery screen. */
 public final class MainActivity extends Activity {
+    private static final int BG = Color.rgb(7, 12, 26);
+    private static final int PANEL = Color.rgb(16, 27, 48);
+    private static final int PANEL_ALT = Color.rgb(20, 34, 59);
+    private static final int CYAN = Color.rgb(77, 218, 255);
+    private static final int WHITE = Color.rgb(245, 248, 255);
+    private static final int MUTED = Color.rgb(164, 180, 207);
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private ScannerEngine scanner;
     private LinearLayout resultsList;
     private TextView status;
+    private TextView countView;
     private Button scanButton;
     private EditText urlInput;
+    private ProgressBar progress;
     private boolean singleLinkMode = true;
     private int candidateCount = 0;
+    private int scanGeneration = 0;
 
     private int dp(float value) {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
-    private TextView text(String value, int size, int color, boolean bold) {
-        TextView view = new TextView(this);
-        view.setText(value);
-        view.setTextSize(size);
-        view.setTextColor(color);
-        if (bold) view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        return view;
+    private GradientDrawable shape(int color, int radiusDp, int strokeColor) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color);
+        d.setCornerRadius(dp(radiusDp));
+        if (strokeColor != 0) d.setStroke(dp(1), strokeColor);
+        return d;
     }
 
-    private Button button(String label) {
+    private TextView text(String value, int size, int color, boolean bold) {
+        TextView v = new TextView(this);
+        v.setText(value);
+        v.setTextSize(size);
+        v.setTextColor(color);
+        v.setIncludeFontPadding(true);
+        if (bold) v.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        else v.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+        return v;
+    }
+
+    private Button button(String label, boolean primary) {
         Button b = new Button(this);
         b.setText(label);
         b.setAllCaps(false);
+        b.setTextSize(14);
+        b.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        b.setTextColor(primary ? BG : WHITE);
+        b.setPadding(dp(12), dp(8), dp(12), dp(8));
+        b.setMinHeight(dp(48));
+        b.setBackground(shape(primary ? CYAN : PANEL_ALT, 14, primary ? 0 : Color.rgb(40, 60, 88)));
+        if (android.os.Build.VERSION.SDK_INT >= 21) b.setElevation(dp(1));
         return b;
+    }
+
+    private LinearLayout column() {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        return l;
+    }
+
+    private LinearLayout.LayoutParams params(int width, int height, int top) {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(width, height);
+        p.topMargin = dp(top);
+        return p;
     }
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().setStatusBarColor(Color.rgb(7, 12, 26));
-        getWindow().setNavigationBarColor(Color.rgb(7, 12, 26));
+        getWindow().setStatusBarColor(BG);
+        getWindow().setNavigationBarColor(BG);
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            getWindow().getDecorView().setSystemUiVisibility(0);
+        }
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(18), dp(20), dp(12));
-        root.setBackgroundColor(Color.rgb(7, 12, 26));
+        LinearLayout root = column();
+        root.setBackgroundColor(BG);
+        root.setPadding(dp(20), dp(14), dp(20), dp(8));
 
-        root.addView(text("S  SaifNest", 27, Color.rgb(77, 218, 255), true));
-        TextView headline = text("Find media.\nPlay what you find.", 27, Color.WHITE, true);
-        LinearLayout.LayoutParams headlineParams = new LinearLayout.LayoutParams(-1, -2);
-        headlineParams.topMargin = dp(12);
-        root.addView(headline, headlineParams);
-        TextView description = text(
-                "Paste a video page or scan a public website. Results appear as they are discovered.",
-                14, Color.rgb(171, 185, 211), false);
-        LinearLayout.LayoutParams descriptionParams = new LinearLayout.LayoutParams(-1, -2);
-        descriptionParams.topMargin = dp(7);
-        root.addView(description, descriptionParams);
+        LinearLayout brandRow = new LinearLayout(this);
+        brandRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView mark = text("S", 28, CYAN, true);
+        mark.setGravity(android.view.Gravity.CENTER);
+        mark.setBackground(shape(PANEL_ALT, 12, Color.rgb(38, 75, 105)));
+        brandRow.addView(mark, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        TextView brand = text("SaifNest", 25, CYAN, true);
+        LinearLayout.LayoutParams brandP = new LinearLayout.LayoutParams(-2, -2);
+        brandP.leftMargin = dp(10);
+        brandRow.addView(brand, brandP);
+        TextView nativeLabel = text("NATIVE MEDIA", 10, MUTED, true);
+        nativeLabel.setGravity(android.view.Gravity.CENTER);
+        nativeLabel.setPadding(dp(9), dp(6), dp(9), dp(6));
+        nativeLabel.setBackground(shape(PANEL, 20, Color.rgb(38, 55, 82)));
+        LinearLayout.LayoutParams badgeP = new LinearLayout.LayoutParams(-2, -2);
+        badgeP.leftMargin = dp(8);
+        brandRow.addView(nativeLabel, badgeP);
+        root.addView(brandRow);
+
+        TextView headline = text("Your media,\none place.", 30, WHITE, true);
+        root.addView(headline, params(-1, -2, 20));
+        TextView subtitle = text("Find videos from a link or explore a public website. Playable files and page links are identified separately.", 14, MUTED, false);
+        root.addView(subtitle, params(-1, -2, 7));
+
+        LinearLayout searchPanel = column();
+        searchPanel.setPadding(dp(14), dp(14), dp(14), dp(14));
+        searchPanel.setBackground(shape(PANEL, 20, Color.rgb(30, 47, 73)));
+        root.addView(searchPanel, params(-1, -2, 20));
 
         LinearLayout modes = new LinearLayout(this);
         modes.setOrientation(LinearLayout.HORIZONTAL);
-        Button linkMode = button("Single link");
-        Button siteMode = button("Scan website");
-        modes.addView(linkMode, new LinearLayout.LayoutParams(0, -2, 1f));
-        modes.addView(siteMode, new LinearLayout.LayoutParams(0, -2, 1f));
-        LinearLayout.LayoutParams modesParams = new LinearLayout.LayoutParams(-1, -2);
-        modesParams.topMargin = dp(12);
-        root.addView(modes, modesParams);
+        Button linkMode = button("Single link", true);
+        Button siteMode = button("Scan website", false);
+        modes.addView(linkMode, new LinearLayout.LayoutParams(0, dp(46), 1));
+        LinearLayout.LayoutParams siteP = new LinearLayout.LayoutParams(0, dp(46), 1);
+        siteP.leftMargin = dp(8);
+        modes.addView(siteMode, siteP);
+        searchPanel.addView(modes);
 
         urlInput = new EditText(this);
         urlInput.setSingleLine(true);
-        urlInput.setHint("Paste a video page or direct media URL");
-        urlInput.setHintTextColor(Color.rgb(112, 128, 155));
-        urlInput.setTextColor(Color.WHITE);
         urlInput.setTextSize(14);
-        urlInput.setPadding(dp(12), dp(8), dp(12), dp(8));
-        urlInput.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(30, 57, 88)));
-        root.addView(urlInput, new LinearLayout.LayoutParams(-1, -2));
+        urlInput.setTextColor(WHITE);
+        urlInput.setHintTextColor(Color.rgb(112, 132, 163));
+        urlInput.setHint("Paste a video or webpage URL");
+        urlInput.setSelectAllOnFocus(false);
+        urlInput.setPadding(dp(14), dp(12), dp(14), dp(12));
+        urlInput.setBackground(shape(BG, 13, Color.rgb(43, 64, 94)));
+        searchPanel.addView(urlInput, params(-1, dp(52), 12));
 
-        LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.HORIZONTAL);
-        scanButton = button("Find videos");
-        Button stop = button("Stop");
-        actions.addView(scanButton, new LinearLayout.LayoutParams(0, -2, 1f));
-        actions.addView(stop, new LinearLayout.LayoutParams(0, -2, 1f));
-        root.addView(actions, new LinearLayout.LayoutParams(-1, -2));
+        scanButton = button("⌕   Find media", true);
+        searchPanel.addView(scanButton, params(-1, dp(50), 10));
+        Button stop = button("Stop scan", false);
+        searchPanel.addView(stop, params(-1, dp(44), 8));
 
-        status = text("Ready", 12, Color.rgb(77, 218, 255), false);
-        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(-1, -2);
-        statusParams.topMargin = dp(7);
-        root.addView(status, statusParams);
+        LinearLayout statusPanel = new LinearLayout(this);
+        statusPanel.setOrientation(LinearLayout.VERTICAL);
+        statusPanel.setPadding(dp(2), dp(12), dp(2), dp(4));
+        root.addView(statusPanel, params(-1, -2, 12));
+        LinearLayout statusRow = new LinearLayout(this);
+        statusRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        statusRow.addView(text("DISCOVERY", 11, CYAN, true));
+        countView = text("  •  Ready", 12, MUTED, false);
+        statusRow.addView(countView);
+        statusPanel.addView(statusRow);
+        status = text("Paste a link to get started.", 12, MUTED, false);
+        statusPanel.addView(status, params(-1, -2, 5));
+        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setIndeterminate(true);
+        progress.setVisibility(View.GONE);
+        if (android.os.Build.VERSION.SDK_INT >= 21) progress.setProgressTintList(android.content.res.ColorStateList.valueOf(CYAN));
+        statusPanel.addView(progress, params(-1, dp(3), 8));
+
+        LinearLayout resultsHeader = new LinearLayout(this);
+        resultsHeader.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView resultsTitle = text("Found media", 18, WHITE, true);
+        resultsHeader.addView(resultsTitle, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView resultsHint = text("LIVE RESULTS", 10, CYAN, true);
+        resultsHeader.addView(resultsHint);
+        root.addView(resultsHeader, params(-1, -2, 12));
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(false);
-        resultsList = new LinearLayout(this);
-        resultsList.setOrientation(LinearLayout.VERTICAL);
-        resultsList.setPadding(0, dp(8), 0, dp(18));
-        resultsList.addView(text(
-                "Detected videos and media candidates will appear here.\n\nThis prototype scans public HTML and common direct media URLs. Some JavaScript players and protected streams may not expose a downloadable URL.",
-                13, Color.rgb(207, 219, 239), false));
+        resultsList = column();
+        resultsList.setPadding(0, dp(10), 0, dp(20));
+        showEmptyState("Nothing here yet", "Your scan results will appear here as they are discovered.");
         scroll.addView(resultsList);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
         setContentView(root, new ViewGroup.LayoutParams(-1, -1));
 
         linkMode.setOnClickListener(v -> {
             singleLinkMode = true;
-            scanButton.setText("Find videos");
-            urlInput.setHint("Paste a video page or direct media URL");
-            status.setText("Single-link mode • one URL");
+            linkMode.setBackground(shape(CYAN, 14, 0));
+            linkMode.setTextColor(BG);
+            siteMode.setBackground(shape(PANEL_ALT, 14, Color.rgb(40, 60, 88)));
+            siteMode.setTextColor(WHITE);
+            scanButton.setText("⌕   Find media");
+            urlInput.setHint("Paste a video or webpage URL");
+            countView.setText("  •  Single link");
         });
         siteMode.setOnClickListener(v -> {
             singleLinkMode = false;
-            scanButton.setText("Scan site");
+            siteMode.setBackground(shape(CYAN, 14, 0));
+            siteMode.setTextColor(BG);
+            linkMode.setBackground(shape(PANEL_ALT, 14, Color.rgb(40, 60, 88)));
+            linkMode.setTextColor(WHITE);
+            scanButton.setText("⌕   Scan website");
             urlInput.setHint("Website URL, e.g. https://example.com");
-            status.setText("Website mode • up to 100 pages");
+            countView.setText("  •  Website scan");
         });
         scanButton.setOnClickListener(v -> startScan());
         stop.setOnClickListener(v -> {
+            scanGeneration++;
             if (scanner != null) scanner.cancel();
-            status.setText("Stopping…");
+            progress.setVisibility(View.GONE);
+            scanButton.setEnabled(true);
+            status.setText("Scan stopped.");
+            countView.setText("  •  Stopped");
         });
+    }
+
+    private void showEmptyState(String title, String message) {
+        LinearLayout empty = column();
+        empty.setGravity(android.view.Gravity.CENTER);
+        empty.setPadding(dp(18), dp(28), dp(18), dp(28));
+        empty.setBackground(shape(PANEL, 18, Color.rgb(30, 47, 73)));
+        TextView icon = text("◈", 34, CYAN, true);
+        icon.setGravity(android.view.Gravity.CENTER);
+        empty.addView(icon);
+        TextView heading = text(title, 16, WHITE, true);
+        heading.setGravity(android.view.Gravity.CENTER);
+        empty.addView(heading, params(-1, -2, 8));
+        TextView desc = text(message, 13, MUTED, false);
+        desc.setGravity(android.view.Gravity.CENTER);
+        empty.addView(desc, params(-1, -2, 5));
+        resultsList.addView(empty);
     }
 
     private void startScan() {
@@ -141,42 +253,46 @@ public final class MainActivity extends Activity {
             urlInput.setError("Enter a valid HTTP(S) URL");
             return;
         }
+        ((InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE))
+                .hideSoftInputFromWindow(urlInput.getWindowToken(), 0);
         if (scanner != null) scanner.cancel();
+        final int generation = ++scanGeneration;
         scanner = new ScannerEngine();
         ScannerEngine active = scanner;
         resultsList.removeAllViews();
         candidateCount = 0;
         scanButton.setEnabled(false);
-        status.setText(singleLinkMode ? "Resolving link…" : "Scanning website…");
+        progress.setVisibility(View.VISIBLE);
+        countView.setText("  •  Scanning");
+        status.setText(singleLinkMode ? "Checking the link…" : "Exploring public pages…");
         int pageLimit = singleLinkMode ? 1 : 100;
 
         worker.execute(() -> active.scan(value, pageLimit, new ScannerEngine.Listener() {
             @Override public void onPage(String url, int pagesVisited, int queuedPages) {
-                runOnUiThread(() -> status.setText(
-                        (singleLinkMode ? "Resolving" : "Pages checked: " + pagesVisited + " • queued: " + queuedPages)
-                                + "\n" + url));
+                runOnUiThread(() -> {
+                    if (generation != scanGeneration) return;
+                    status.setText((singleLinkMode ? "Resolving link" : "Pages checked: " + pagesVisited + " • queued: " + queuedPages) + "\n" + url);
+                });
             }
-
             @Override public void onCandidate(String pageUrl, String mediaUrl, String kind) {
-                runOnUiThread(() -> addCandidate(pageUrl, mediaUrl, kind));
+                runOnUiThread(() -> { if (generation == scanGeneration) addCandidate(pageUrl, mediaUrl, kind); });
             }
-
             @Override public void onError(String url, String message) {
                 runOnUiThread(() -> {
-                    TextView error = text("Could not inspect: " + url + "\n" + message,
-                            12, Color.rgb(255, 170, 145), false);
-                    error.setPadding(dp(8), dp(8), dp(8), dp(8));
+                    if (generation != scanGeneration) return;
+                    TextView error = text("Could not inspect this page\n" + message, 12, Color.rgb(255, 165, 150), false);
+                    error.setPadding(dp(10), dp(10), dp(10), dp(10));
                     resultsList.addView(error);
                 });
             }
-
             @Override public void onFinished(int pagesVisited, int count) {
                 runOnUiThread(() -> {
-                    status.setText("Finished • pages: " + pagesVisited + " • media candidates: " + count);
+                    if (generation != scanGeneration) return;
+                    progress.setVisibility(View.GONE);
                     scanButton.setEnabled(true);
-                    if (count == 0) resultsList.addView(text(
-                            "No direct media candidates found. The page may use JavaScript, a protected player, or a format this prototype does not recognize.",
-                            13, Color.rgb(207, 219, 239), false));
+                    countView.setText("  •  " + count + " found");
+                    status.setText("Finished · pages checked: " + pagesVisited + " · candidates: " + count);
+                    if (count == 0) showEmptyState("No media found", "This site may use a JavaScript player, require access, or use a format that is not detected yet.");
                 });
             }
         }));
@@ -184,39 +300,88 @@ public final class MainActivity extends Activity {
 
     private void addCandidate(String pageUrl, String mediaUrl, String kind) {
         candidateCount++;
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(12), dp(10), dp(12), dp(10));
-        card.setBackgroundColor(Color.rgb(16, 27, 48));
+        LinearLayout card = column();
+        card.setPadding(dp(14), dp(14), dp(14), dp(14));
+        card.setBackground(shape(PANEL, 18, Color.rgb(31, 49, 76)));
         LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(-1, -2);
         cardParams.bottomMargin = dp(10);
 
-        card.addView(text("MEDIA " + candidateCount + " • " + kind, 12,
-                Color.rgb(77, 218, 255), true));
-        TextView url = text(mediaUrl, 13, Color.WHITE, false);
-        url.setTextIsSelectable(true);
-        LinearLayout.LayoutParams urlParams = new LinearLayout.LayoutParams(-1, -2);
-        urlParams.topMargin = dp(5);
-        card.addView(url, urlParams);
-        TextView source = text("Source page: " + pageUrl, 11,
-                Color.rgb(171, 185, 211), false);
-        LinearLayout.LayoutParams sourceParams = new LinearLayout.LayoutParams(-1, -2);
-        sourceParams.topMargin = dp(5);
-        card.addView(source, sourceParams);
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView number = text(String.format(Locale.US, "%02d", candidateCount), 12, CYAN, true);
+        number.setGravity(android.view.Gravity.CENTER);
+        number.setBackground(shape(BG, 10, Color.rgb(37, 67, 96)));
+        top.addView(number, new LinearLayout.LayoutParams(dp(38), dp(34)));
+        TextView kindView = text(kind == null ? "Media candidate" : kind, 12, CYAN, true);
+        LinearLayout.LayoutParams kindP = new LinearLayout.LayoutParams(0, -2, 1);
+        kindP.leftMargin = dp(10);
+        top.addView(kindView, kindP);
+        card.addView(top);
 
-        Button play = button("▶  Play in SaifNest");
-        LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, -2);
-        playParams.topMargin = dp(5);
+        TextView url = text(mediaUrl, 13, WHITE, false);
+        url.setTextIsSelectable(true);
+        url.setMaxLines(4);
+        card.addView(url, params(-1, -2, 10));
+
+        TextView source = text("SOURCE PAGE\n" + pageUrl, 11, MUTED, false);
+        source.setMaxLines(3);
+        card.addView(source, params(-1, -2, 8));
+
+        boolean direct = isDirectMedia(mediaUrl, kind);
+        TextView tag = text(direct ? "DIRECT MEDIA URL" : "WEBPAGE / UNVERIFIED STREAM", 10,
+                direct ? Color.rgb(104, 230, 174) : Color.rgb(255, 204, 120), true);
+        card.addView(tag, params(-1, -2, 9));
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        Button play = button(direct ? "▶  Play" : "▶  Open page", true);
+        Button download = button("↓  Download", false);
+        actions.addView(play, new LinearLayout.LayoutParams(0, dp(46), 1));
+        LinearLayout.LayoutParams downP = new LinearLayout.LayoutParams(0, dp(46), 1);
+        downP.leftMargin = dp(8);
+        actions.addView(download, downP);
+        card.addView(actions, params(-1, -2, 12));
+
         play.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, PlayerActivity.class);
             intent.setData(Uri.parse("saifnest://play?url=" + Uri.encode(mediaUrl)));
             startActivity(intent);
         });
-        card.addView(play, playParams);
+        download.setOnClickListener(v -> {
+            if (!isDirectMedia(mediaUrl, kind)) {
+                Toast.makeText(this, "This is a webpage, not a verified media file. Open it first and resolve the actual video URL.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            try {
+                String fileName = Uri.parse(mediaUrl).getLastPathSegment();
+                if (fileName == null || fileName.trim().isEmpty()) fileName = "saifnest-media-" + System.currentTimeMillis() + ".mp4";
+                DownloadManager.Request request = new DownloadManager.Request(Uri.parse(mediaUrl));
+                request.setTitle(fileName);
+                request.setDescription("Downloading with SaifNest");
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                request.setAllowedOverMetered(true);
+                request.setAllowedOverRoaming(false);
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "SaifNest/" + fileName);
+                DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                manager.enqueue(request);
+                Toast.makeText(this, "Download queued. Progress appears in Android notifications.", Toast.LENGTH_LONG).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Could not start download: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
         resultsList.addView(card, cardParams);
     }
 
+    private boolean isDirectMedia(String value, String kind) {
+        if (value == null) return false;
+        String lower = value.toLowerCase(Locale.ROOT);
+        boolean extension = Pattern.compile("\\.(mp4|m4v|webm|mov|mkv|mp3|m4a|aac|ogg|opus|m3u8|mpd)(?:$|[?#])").matcher(lower).find();
+        boolean mime = kind != null && (kind.toLowerCase(Locale.ROOT).startsWith("video/") || kind.toLowerCase(Locale.ROOT).startsWith("audio/"));
+        return extension || mime;
+    }
+
     @Override protected void onDestroy() {
+        scanGeneration++;
         if (scanner != null) scanner.cancel();
         worker.shutdownNow();
         super.onDestroy();
