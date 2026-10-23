@@ -14,6 +14,8 @@ import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.inputmethod.EditorInfo;
 import android.webkit.WebChromeClient;
+import android.webkit.CookieManager;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -26,7 +28,8 @@ import android.widget.Toast;
 
 import org.json.JSONArray;
 
-import java.net.URLDecoder;
+import java.io.ByteArrayInputStream;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -41,7 +44,21 @@ public final class BrowserActivity extends Activity {
     private static final int CYAN = Color.rgb(77, 218, 255), WHITE = Color.rgb(245, 248, 255);
     private static final int MUTED = Color.rgb(164, 180, 207);
     private static final Pattern MEDIA = Pattern.compile("(?i)\\.(mp4|m4v|webm|mov|mkv|mp3|m4a|aac|ogg|opus|m3u8|mpd)(?:$|[?#])");
-    private final Set<String> found = new LinkedHashSet<>();
+    private final Set<String> found = Collections.synchronizedSet(new LinkedHashSet<>());
+    private static final String[] AD_HOSTS = {
+        "doubleclick.net", "googlesyndication.com", "googleadservices.com",
+        "googletagservices.com", "adservice.google.com", "adnxs.com",
+        "adform.net", "adsrvr.org", "advertising.com", "adcolony.com",
+        "unityads.unity3d.com", "applovin.com", "mopub.com", "taboola.com",
+        "outbrain.com", "criteo.com", "pubmatic.com", "openx.net",
+        "rubiconproject.com", "lijit.com", "smartadserver.com", "zedo.com",
+        "popads.net", "popcash.net", "propellerads.com", "exoclick.com",
+        "trafficjunky.net", "juicyads.com", "mgid.com"
+    };
+    private static final String[] AD_PATH_MARKERS = {
+        "/ads/", "/adserver/", "/advertising/", "/banner-ad", "/popunder",
+        "/pop-up", "/popup.php", "/tracking/", "/track.gif", "/pixel.gif"
+    };
     private EditText address;
     private WebView web;
     private LinearLayout mediaList;
@@ -107,7 +124,11 @@ public final class BrowserActivity extends Activity {
             @Override public void onPageFinished(WebView view, String url) {
                 address.setText(url); pageStatus.setText("Watching page resources for supported media…");
                 // DOM discovery complements network request observation; this cannot see every blob/DRM stream.
-                String js = "(function(){var a=[];document.querySelectorAll('video,audio,video source,audio source').forEach(function(e){var u=e.currentSrc||e.src||e.getAttribute('src');if(u&&u.indexOf('blob:')!==0)a.push(u)});return JSON.stringify(a)})()";
+                String js = "(function(){var a=[];function add(u){if(u&&a.indexOf(u)<0)a.push(u)};" +
+                        "document.querySelectorAll('video,audio,video source,audio source,source').forEach(function(e){add(e.currentSrc||e.src||e.getAttribute('src'))});" +
+                        "performance.getEntriesByType('resource').forEach(function(e){if(/\\.(mp4|m4v|webm|mov|mkv|mp3|m4a|aac|ogg|opus|m3u8|mpd)(?:$|[?#])/i.test(e.name)||/videoplayback|\\/media\\//i.test(e.name))add(e.name)});" +
+                        "document.querySelectorAll('meta[property=\'og:video\'],meta[name=\'twitter:player:stream\'],link[rel=\'preload\'][as=\'video\']').forEach(function(e){add(e.content||e.href)});" +
+                        "return JSON.stringify(a)})()";
                 view.evaluateJavascript(js, value -> {
                     try {
                         if (value == null || "null".equals(value)) return;
@@ -118,7 +139,11 @@ public final class BrowserActivity extends Activity {
             }
             @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
-                if (isHttp(url) && MEDIA.matcher(url).find()) addMedia(url, "Browser network request");
+                if (isHttp(url) && isAdRequest(url)) {
+                    return new WebResourceResponse("text/plain", "utf-8",
+                            new ByteArrayInputStream(new byte[0]));
+                }
+                if (isHttp(url) && looksLikeMedia(url)) addMedia(url, "Browser network request");
                 return super.shouldInterceptRequest(view, request);
             }
         });
@@ -156,6 +181,33 @@ public final class BrowserActivity extends Activity {
         try { Uri u=Uri.parse(s); return u.getHost()!=null && ("http".equalsIgnoreCase(u.getScheme()) || "https".equalsIgnoreCase(u.getScheme())); }
         catch (Exception e) { return false; }
     }
+
+    private boolean isAdRequest(String rawUrl) {
+        try {
+            Uri uri = Uri.parse(rawUrl);
+            String host = uri.getHost();
+            if (host == null) return false;
+            host = host.toLowerCase(Locale.ROOT);
+            for (String domain : AD_HOSTS) {
+                if (host.equals(domain) || host.endsWith("." + domain)) return true;
+            }
+            String path = (uri.getPath() == null ? "" : uri.getPath()).toLowerCase(Locale.ROOT);
+            String query = (uri.getEncodedQuery() == null ? "" : uri.getEncodedQuery()).toLowerCase(Locale.ROOT);
+            String full = path + "?" + query;
+            for (String marker : AD_PATH_MARKERS) if (full.contains(marker)) return true;
+            return full.matches(".*[?&](ad|ads|ad_id|adunit|advert|campaign_id|click_id|doubleclick)=.*");
+        } catch (Exception ignored) { return false; }
+    }
+
+    private boolean looksLikeMedia(String url) {
+        String lower = url.toLowerCase(Locale.ROOT);
+        return MEDIA.matcher(lower).find()
+                || lower.contains("videoplayback")
+                || lower.contains("/media/")
+                || lower.contains("mime=video")
+                || lower.contains("contenttype=video");
+    }
+
     private void addMedia(String url, String source) {
         if (!isHttp(url) || !found.add(url)) return;
         runOnUiThread(() -> {
@@ -176,14 +228,20 @@ public final class BrowserActivity extends Activity {
             });
             download.setOnClickListener(v -> {
                 String lower = url.toLowerCase(Locale.ROOT);
-                if (lower.contains(".m3u8") || lower.contains(".mpd") || lower.startsWith("blob:")) {
-                    Toast.makeText(this, "This is a stream/temporary URL; a compatible stream downloader is needed.", Toast.LENGTH_LONG).show(); return;
+                if (lower.contains(".m3u8") || lower.contains(".mpd")) {
+                    Toast.makeText(this, "This is an HLS/DASH stream. Stream downloading is not enabled yet; try Play.", Toast.LENGTH_LONG).show(); return;
                 }
                 try {
                     String file = Uri.parse(url).getLastPathSegment();
                     if (file == null || file.trim().isEmpty()) file = "saifnest-" + System.currentTimeMillis() + ".mp4";
                     DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
                     req.setTitle(file); req.setDescription("SaifNest browser download");
+                    req.setMimeType("video/*");
+                    req.addRequestHeader("User-Agent", web.getSettings().getUserAgentString());
+                    String cookie = CookieManager.getInstance().getCookie(url);
+                    if (cookie != null && !cookie.isEmpty()) req.addRequestHeader("Cookie", cookie);
+                    String referer = web.getUrl();
+                    if (referer != null && isHttp(referer)) req.addRequestHeader("Referer", referer);
                     req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
                     req.setAllowedOverMetered(true); req.setAllowedOverRoaming(false);
                     req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "SaifNest/" + file);
