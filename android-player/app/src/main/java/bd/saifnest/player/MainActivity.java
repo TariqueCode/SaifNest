@@ -50,7 +50,17 @@ public final class MainActivity extends Activity {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
-    private int getStatusBarInset() {\n        int id = getResources().getIdentifier("status_bar_height", "dimen", "android");\n        return id > 0 ? getResources().getDimensionPixelSize(id) : dp(24);\n    }\n\n    private int getNavigationInset() {\n        int id = getResources().getIdentifier("navigation_bar_height", "dimen", "android");\n        return id > 0 ? getResources().getDimensionPixelSize(id) : dp(0);\n    }\n\n    private GradientDrawable shape(int color, int radiusDp, int strokeColor) {
+    private int getStatusBarInset() {
+        int id = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        return id > 0 ? getResources().getDimensionPixelSize(id) : dp(24);
+    }
+
+    private int getNavigationInset() {
+        int id = getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+        return id > 0 ? getResources().getDimensionPixelSize(id) : dp(0);
+    }
+
+    private GradientDrawable shape(int color, int radiusDp, int strokeColor) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
         d.setCornerRadius(dp(radiusDp));
