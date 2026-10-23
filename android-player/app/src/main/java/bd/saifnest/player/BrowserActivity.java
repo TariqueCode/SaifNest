@@ -54,17 +54,27 @@ public final class BrowserActivity extends Activity {
         "outbrain.com", "criteo.com", "pubmatic.com", "openx.net",
         "rubiconproject.com", "lijit.com", "smartadserver.com", "zedo.com",
         "popads.net", "popcash.net", "propellerads.com", "exoclick.com",
-        "trafficjunky.net", "juicyads.com", "mgid.com"
+        "trafficjunky.net", "juicyads.com", "mgid.com",
+        "amazon-adsystem.com", "advertising.com", "adsafeprotected.com", "adroll.com",
+        "bidswitch.net", "casalemedia.com", "contextweb.com", "e-planning.net",
+        "fastclick.net", "flashtalking.com", "google-analytics.com", "googletagmanager.com",
+        "hotjar.com", "mixpanel.com", "segment.io", "segment.com", "scorecardresearch.com",
+        "quantserve.com", " moatads.com", " branch.io", "app-measurement.com",
+        "analytics.yahoo.com", "ads.yahoo.com", "analytics.tiktok.com", "connect.facebook.net"
     };
     private static final String[] AD_PATH_MARKERS = {
         "/ads/", "/adserver/", "/advertising/", "/banner-ad", "/popunder",
-        "/pop-up", "/popup.php", "/tracking/", "/track.gif", "/pixel.gif"
+        "/pop-up", "/popup.php", "/tracking/", "/track.gif", "/pixel.gif",
+        "/analytics/", "/beacon/", "/impression", "/clicktracker", "/adchoices",
+        "/sponsor/", "/sponsored/", "/promoted/", "/affiliate/", "/retargeting/"
     };
     private EditText address;
     private WebView web;
     private LinearLayout mediaList;
     private TextView pageStatus;
     private int seq = 0;
+    private volatile int blockedRequests = 0;
+    private volatile boolean adBlockEnabled = true;
 
     private int dp(float n) { return (int)(n * getResources().getDisplayMetrics().density + .5f); }
     private GradientDrawable bg(int color, int radius, int stroke) {
@@ -99,6 +109,7 @@ public final class BrowserActivity extends Activity {
         TextView title = label("SaifNest Browser", 20, CYAN, true);
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, -2, 1); tp.leftMargin = dp(10); head.addView(title, tp);
         Button downloads = button("↓", false); head.addView(downloads, new LinearLayout.LayoutParams(dp(46), dp(44)));
+        Button blocker = button("🛡", true); LinearLayout.LayoutParams blockerP = new LinearLayout.LayoutParams(dp(46), dp(44)); blockerP.leftMargin = dp(6); head.addView(blocker, blockerP);
         Button refresh = button("↻", false); LinearLayout.LayoutParams refreshP = new LinearLayout.LayoutParams(dp(46), dp(44)); refreshP.leftMargin = dp(6); head.addView(refresh, refreshP);
         root.addView(head);
         LinearLayout bar = new LinearLayout(this); bar.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -158,7 +169,9 @@ public final class BrowserActivity extends Activity {
             }
             @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
-                if (isHttp(url) && isAdRequest(url)) {
+                if (adBlockEnabled && isHttp(url) && isAdRequest(url)) {
+                    blockedRequests++;
+                    runOnUiThread(() -> pageStatus.setText("Ad blocker active · " + blockedRequests + " requests blocked"));
                     return new WebResourceResponse("text/plain", "utf-8",
                             new ByteArrayInputStream(new byte[0]));
                 }
@@ -178,6 +191,14 @@ public final class BrowserActivity extends Activity {
 
         back.setOnClickListener(v -> { if (web.canGoBack()) web.goBack(); else finish(); });
         downloads.setOnClickListener(v -> startActivity(new Intent(this, MediaLibraryActivity.class)));
+        blocker.setOnClickListener(v -> {
+            adBlockEnabled = !adBlockEnabled;
+            blocker.setText(adBlockEnabled ? "🛡" : "Shield OFF");
+            blocker.setTextColor(adBlockEnabled ? BG : WHITE);
+            blocker.setBackground(bg(adBlockEnabled ? CYAN : PANEL, 12, 0));
+            Toast.makeText(this, adBlockEnabled ? "Ad blocker enabled" : "Ad blocker paused for this session", Toast.LENGTH_SHORT).show();
+            web.reload();
+        });
         refresh.setOnClickListener(v -> web.reload());
         go.setOnClickListener(v -> loadAddress());
         address.setOnEditorActionListener((v, action, event) -> {
@@ -213,13 +234,16 @@ public final class BrowserActivity extends Activity {
             if (host == null) return false;
             host = host.toLowerCase(Locale.ROOT);
             for (String domain : AD_HOSTS) {
-                if (host.equals(domain) || host.endsWith("." + domain)) return true;
+                String normalized = domain.trim();
+                if (!normalized.isEmpty() && (host.equals(normalized) || host.endsWith("." + normalized))) return true;
             }
             String path = (uri.getPath() == null ? "" : uri.getPath()).toLowerCase(Locale.ROOT);
             String query = (uri.getEncodedQuery() == null ? "" : uri.getEncodedQuery()).toLowerCase(Locale.ROOT);
             String full = path + "?" + query;
             for (String marker : AD_PATH_MARKERS) if (full.contains(marker)) return true;
-            return full.matches(".*[?&](ad|ads|ad_id|adunit|advert|campaign_id|click_id|doubleclick)=.*");
+            if (full.matches(".*[?&](ad|ads|ad_id|adunit|advert|campaign_id|click_id|doubleclick|utm_source=ad|sponsored)=.*")) return true;
+            String file = uri.getLastPathSegment();
+            return file != null && file.toLowerCase(Locale.ROOT).matches("(ads?|adserver|advert|tracking|pixel|beacon)([-_.].*)?\\.(js|gif|png|jpg|webp|html?)");
         } catch (Exception ignored) { return false; }
     }
 
