@@ -122,7 +122,7 @@ public final class MainActivity extends Activity {
         LinearLayout brandRow = new LinearLayout(this);
         brandRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
         ImageView mark = new ImageView(this);
-        mark.setImageResource(R.drawable.saifnest_logo);
+        mark.setImageResource(R.drawable.saifnest_brand_mark);
         mark.setScaleType(ImageView.ScaleType.FIT_CENTER);
         mark.setContentDescription("SaifNest logo");
         brandRow.addView(mark, new LinearLayout.LayoutParams(dp(48), dp(48)));
@@ -355,7 +355,7 @@ public final class MainActivity extends Activity {
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         Button play = button(direct ? "▶  Play" : "▶  Open page", true);
-        Button download = button("↓  Download", false);
+        Button download = button(direct ? "↓  Download" : "⌕  Find stream", false);
         actions.addView(play, new LinearLayout.LayoutParams(0, dp(46), 1));
         LinearLayout.LayoutParams downP = new LinearLayout.LayoutParams(0, dp(46), 1);
         downP.leftMargin = dp(8);
@@ -363,13 +363,27 @@ public final class MainActivity extends Activity {
         card.addView(actions, params(-1, -2, 12));
 
         play.setOnClickListener(v -> {
+            if (!direct) {
+                Intent browser = new Intent(MainActivity.this, BrowserActivity.class);
+                browser.putExtra("url", mediaUrl);
+                startActivity(browser);
+                return;
+            }
             Intent intent = new Intent(MainActivity.this, PlayerActivity.class);
             intent.setData(Uri.parse("saifnest://play?url=" + Uri.encode(mediaUrl)));
             startActivity(intent);
         });
         download.setOnClickListener(v -> {
-            if (!isDirectMedia(mediaUrl, kind)) {
-                Toast.makeText(this, "This is a webpage, not a verified media file. Open it first and resolve the actual video URL.", Toast.LENGTH_LONG).show();
+            if (!direct) {
+                Intent browser = new Intent(MainActivity.this, BrowserActivity.class);
+                browser.putExtra("url", mediaUrl);
+                startActivity(browser);
+                Toast.makeText(this, "Page opened. Play the video once; SaifNest will watch for its media stream.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            String lowerUrl = mediaUrl.toLowerCase(Locale.ROOT);
+            if (lowerUrl.contains(".m3u8") || lowerUrl.contains(".mpd")) {
+                Toast.makeText(this, "This is a streaming playlist, not a single file. Use Play; stream downloading is not available yet.", Toast.LENGTH_LONG).show();
                 return;
             }
             try {
