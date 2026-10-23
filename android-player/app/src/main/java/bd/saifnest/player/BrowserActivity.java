@@ -129,10 +129,24 @@ public final class BrowserActivity extends Activity {
         web.addJavascriptInterface(new MediaBridge(), "SaifNestBridge");
         CookieManager.getInstance().setAcceptCookie(true);
         if (android.os.Build.VERSION.SDK_INT >= 21) CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
-        web.setWebChromeClient(new WebChromeClient());
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
+                if (adBlockEnabled) {
+                    runOnUiThread(() -> pageStatus.setText("Blocked a pop-up window"));
+                    return false;
+                }
+                return super.onCreateWindow(view, isDialog, isUserGesture, resultMsg);
+            }
+        });
         web.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                if (request.isForMainFrame()) address.setText(request.getUrl().toString());
+                String target = request.getUrl().toString();
+                if (request.isForMainFrame() && adBlockEnabled && isHttp(target) && isAdRequest(target)) {
+                    blockedRequests++;
+                    pageStatus.setText("Blocked an advertising redirect · " + blockedRequests + " requests blocked");
+                    return true;
+                }
+                if (request.isForMainFrame()) address.setText(target);
                 return false;
             }
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
@@ -146,9 +160,21 @@ public final class BrowserActivity extends Activity {
                         "performance.getEntriesByType('resource').forEach(function(e){if(/\\.(mp4|m4v|webm|mov|mkv|mp3|m4a|aac|ogg|opus|m3u8|mpd)(?:$|[?#])/i.test(e.name)||/videoplayback|\\/media\\//i.test(e.name))add(e.name)});" +
                         "document.querySelectorAll(\"meta[property='og:video'],meta[name='twitter:player:stream'],link[rel='preload'][as='video']\").forEach(function(e){add(e.content||e.href)});" +
                         "return JSON.stringify(a)})()";
-                view.evaluateJavascript("(function(){try{window.open=function(){return null};" +
-                        "var css='iframe[src*=\\\"ad\\\"],iframe[id*=\\\"ad\\\"],[class*=\\\"advertisement\\\"],[id*=\\\"advertisement\\\"],[class*=\\\"ad-container\\\"],[id*=\\\"ad-container\\\"],[class*=\\\"popunder\\\"],[id*=\\\"popunder\\\"]{display:none!important;visibility:hidden!important;pointer-events:none!important}';" +
+                view.evaluateJavascript("(function(){try{" +
+                        "window.open=function(){return null};" +
+                        "var css='iframe[src*=\\\"ad\\\"],iframe[id*=\\\"ad\\\"],[id*=\\\"advertisement\\\"],[class*=\\\"advertisement\\\"],[id*=\\\"ad-container\\\"],[class*=\\\"ad-container\\\"],[id*=\\\"ad-slot\\\"],[class*=\\\"ad-slot\\\"],[id*=\\\"ad-banner\\\"],[class*=\\\"ad-banner\\\"],[class*=\\\"sponsor\\\"],[id*=\\\"sponsor\\\"],[class*=\\\"popunder\\\"],[id*=\\\"popunder\\\"],[class*=\\\"cookie-consent-ad\\\"]{display:none!important;visibility:hidden!important;pointer-events:none!important;max-height:0!important;min-height:0!important;overflow:hidden!important}';" +
                         "var s=document.getElementById('saifnest-ad-style');if(!s){s=document.createElement('style');s.id='saifnest-ad-style';s.textContent=css;(document.head||document.documentElement).appendChild(s)}" +
+                        "var anti=/disable your ad blocker|please disable ad blocker|ad blocker detected|turn off your ad blocker|adblock detected|advertising blocker/i;" +
+                        "function clean(){try{" +
+                        "document.querySelectorAll('iframe,div,section,aside,dialog,article').forEach(function(e){" +
+                        "if(e.id==='saifnest-ad-style'||e.closest('video,main,article[data-content],.article-content'))return;" +
+                        "var t=((e.innerText||e.textContent||'').slice(0,500)).toLowerCase();" +
+                        "if(anti.test(t)&&e.children.length<12){e.style.setProperty('display','none','important');e.setAttribute('data-saifnest-cleaned','anti-adblock');}" +
+                        "var id=(e.id||'').toLowerCase(),cl=(typeof e.className==='string'?e.className:'').toLowerCase();" +
+                        "if(/(^|[-_ ])(adslot|ad-slot|advertisement|ad-container|banner-ad|popunder|sponsor-box)([-_ ]|$)/.test(id+' '+cl)){e.style.setProperty('display','none','important');}" +
+                        "});" +
+                        "document.querySelectorAll('a[target=_blank]').forEach(function(a){a.setAttribute('rel','noopener noreferrer');});" +
+                        "}catch(e){}}clean();new MutationObserver(clean).observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','id','style']});" +
                         "}catch(e){};return true})()", ignored -> {});
                 String observer = "(function(){try{" +
                         "function scan(){try{document.querySelectorAll('video,audio,video source,audio source').forEach(function(e){" +
