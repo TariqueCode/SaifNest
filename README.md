@@ -23,8 +23,8 @@ The SaifNest mark combines a connected globe with a flowing metallic-blue ribbon
 
 - **Primary colours:** midnight navy, royal blue, cyan, and silver.
 - **Logo usage:** keep the mark on transparent backgrounds; do not add a solid background to the master asset.
-- **Master logo:** the user-provided `SaifNest.png` is the approved source artwork; do not redraw it as SVG or substitute a generated vector.
-- **Android launcher:** use the approved PNG artwork as the source image, with launcher-safe sizing and background treatment. The PNG must be committed to the repository before launcher integration can be verified.
+- **Master logo:** `android-player/app/src/main/res/drawable-nodpi/saifnest_logo.png` is the canonical, user-provided PNG artwork. Do not redraw it as SVG or substitute a generated vector.
+- **Android launcher:** adaptive launcher icons reference the canonical `saifnest_logo` drawable resource; Android resolves the PNG from `drawable-nodpi`.
 - **App name:** SaifNest.
 
 ## Current features
