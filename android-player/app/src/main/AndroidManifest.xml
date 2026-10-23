@@ -1,0 +1,19 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application
+        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:label="SaifNest Player"
+        android:usesCleartextTraffic="false">
+        <activity
+            android:name=".PlayerActivity"
+            android:screenOrientation="sensor"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="saifnest" android:host="play" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
