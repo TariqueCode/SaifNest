@@ -3,6 +3,8 @@
     <application
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:label="SaifNest"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
         <activity android:name=".BrowserActivity" android:exported="false" />
         <activity
