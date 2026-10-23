@@ -1,10 +1,11 @@
 # SaifNest Native Android
 
-The Android module is the start of a standalone Kotlin/Media3 application. The installed product must not require Termux, Python, Flask, Node.js, or a separately managed server.
+The Android module is the start of a standalone native application. The installed product must not require Termux, Python, Flask, Node.js, or a user-managed server.
 
 ## Current scope
+- Native Android launch screen with HTTP(S) media-link entry.
 - Media3/ExoPlayer playback starter.
-- Scalable brand artwork at `app/src/main/res/drawable/saifnest_logo.svg`.
+- Scalable brand artwork in `app/src/main/assets/saifnest_logo.svg`.
 - GitHub Actions debug APK workflow.
 
 ## Build
@@ -18,7 +19,7 @@ gradle assembleDebug
 
 The workflow uploads the debug APK as `saifnest-player-debug-apk` when the build succeeds.
 
-## Roadmap
-The complete native app still needs the Compose app shell, Kotlin scanner, live media detection, persistent download manager, localization, and device testing. See `docs/NATIVE-ANDROID-PLAN.md` at repository root.
+## Remaining work
+Website scanning, sitemap/pagination crawling, live media request observation, a persistent download queue, pause/resume, localization, launcher bitmap/adaptive icons, and device testing are not implemented yet. See `../docs/NATIVE-ANDROID-PLAN.md`.
 
-This player starter handles public HTTP(S) URLs only. Streams requiring cookies, custom headers, DRM, or expiring signed URL renewal need additional integration. Do not use it to bypass access controls.
+This is an early native foundation, not a complete app. Playback supports public HTTP(S) URLs; streams requiring cookies, custom headers, DRM, or expiring signed URL renewal need additional integration. Do not use it to bypass access controls.
