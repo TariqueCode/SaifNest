@@ -17,6 +17,7 @@ import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
@@ -148,7 +149,11 @@ public final class PlayerActivity extends Activity {
                         Toast.LENGTH_LONG).show();
             }
         });
-        player.setMediaItem(MediaItem.fromUri(Uri.parse(url)));
+        MediaItem.Builder media = new MediaItem.Builder().setUri(Uri.parse(url));
+        String lower = url.toLowerCase(Locale.ROOT);
+        if (lower.matches(".*\\.m3u8(?:[?#].*)?$")) media.setMimeType(MimeTypes.APPLICATION_M3U8);
+        else if (lower.matches(".*\\.mpd(?:[?#].*)?$")) media.setMimeType(MimeTypes.APPLICATION_MPD);
+        player.setMediaItem(media.build());
         player.prepare();
         player.play();
         if (message != null) message.setText("Opening direct media…");

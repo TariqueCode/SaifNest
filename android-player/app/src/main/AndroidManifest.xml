@@ -6,7 +6,13 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
-        <activity android:name=".BrowserActivity" android:exported="false" />
+        <activity android:name=".MediaLibraryActivity" android:exported="false" />
+        <activity android:name=".BrowserActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".PlayerActivity"
             android:screenOrientation="sensor"
@@ -18,11 +24,6 @@
                 <data android:scheme="saifnest" android:host="play" />
             </intent-filter>
         </activity>
-        <activity android:name=".MainActivity" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+        <activity android:name=".MainActivity" android:exported="false" />
     </application>
 </manifest>
