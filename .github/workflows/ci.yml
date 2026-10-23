@@ -1,0 +1,73 @@
+name: SaifNest CI and Android Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.py'
+      - '**.js'
+      - '**.html'
+      - '**.css'
+      - 'requirements.txt'
+      - 'android-player/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-checks:
+    name: Python syntax and dependency check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check source presence
+        run: |
+          if [ ! -f app.py ]; then
+            echo '::error::SaifNest source app.py is not present yet. Upload the full project source to the repository.'
+            exit 1
+          fi
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Python syntax
+        run: python -m py_compile app.py
+      - name: JavaScript syntax
+        run: |
+          if [ -f static/app.js ]; then
+            node --check static/app.js
+          else
+            echo '::error::static/app.js is missing'
+            exit 1
+          fi
+
+  android-build:
+    name: Build SaifNest Android player
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('android-player/**') != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build debug APK
+        working-directory: android-player
+        run: gradle assembleDebug
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: saifnest-player-debug-apk
+          path: android-player/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
