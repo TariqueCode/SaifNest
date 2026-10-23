@@ -1,7 +1,10 @@
 package bd.saifnest.player;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.DownloadManager;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -9,20 +12,23 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.inputmethod.EditorInfo;
-import android.webkit.WebChromeClient;
-import android.webkit.JavascriptInterface;
 import android.webkit.CookieManager;
-import android.webkit.WebResourceResponse;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -34,303 +40,476 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
- * Browser-first media discovery. It observes ordinary WebView resource requests
- * and DOM video sources; it does not defeat DRM, authentication, or site controls.
+ * SaifNest Browser — redesigned browser shell.
+ * UI is deliberately built from native Android views to keep the app lightweight.
  */
 public final class BrowserActivity extends Activity {
-    private static final int BG = Color.rgb(7, 12, 26), PANEL = Color.rgb(16, 27, 48);
-    private static final int CYAN = Color.rgb(77, 218, 255), WHITE = Color.rgb(245, 248, 255);
-    private static final int MUTED = Color.rgb(164, 180, 207);
-    private static final Pattern MEDIA = Pattern.compile("(?i)\\.(mp4|m4v|webm|mov|mkv|mp3|m4a|aac|ogg|opus|m3u8|mpd)(?:$|[?#])");
+    private static final int BG = Color.rgb(7, 11, 23);
+    private static final int SURFACE = Color.rgb(15, 23, 42);
+    private static final int CARD = Color.rgb(20, 31, 54);
+    private static final int BORDER = Color.rgb(40, 56, 83);
+    private static final int CYAN = Color.rgb(78, 218, 255);
+    private static final int WHITE = Color.rgb(241, 246, 255);
+    private static final int MUTED = Color.rgb(150, 169, 199);
+
     private final Set<String> found = Collections.synchronizedSet(new LinkedHashSet<>());
     private static final String[] AD_HOSTS = {
         "doubleclick.net", "googlesyndication.com", "googleadservices.com",
-        "googletagservices.com", "adservice.google.com", "adnxs.com",
-        "adform.net", "adsrvr.org", "advertising.com", "adcolony.com",
-        "unityads.unity3d.com", "applovin.com", "mopub.com", "taboola.com",
-        "outbrain.com", "criteo.com", "pubmatic.com", "openx.net",
-        "rubiconproject.com", "lijit.com", "smartadserver.com", "zedo.com",
-        "popads.net", "popcash.net", "propellerads.com", "exoclick.com",
-        "trafficjunky.net", "juicyads.com", "mgid.com",
-        "amazon-adsystem.com", "advertising.com", "adsafeprotected.com", "adroll.com",
-        "bidswitch.net", "casalemedia.com", "contextweb.com", "e-planning.net",
-        "fastclick.net", "flashtalking.com", "google-analytics.com", "googletagmanager.com",
-        "hotjar.com", "mixpanel.com", "segment.io", "segment.com", "scorecardresearch.com",
-        "quantserve.com", " moatads.com", " branch.io", "app-measurement.com",
-        "analytics.yahoo.com", "ads.yahoo.com", "analytics.tiktok.com", "connect.facebook.net"
+        "googletagservices.com", "adnxs.com", "adform.net", "adsrvr.org",
+        "advertising.com", "taboola.com", "outbrain.com", "criteo.com",
+        "pubmatic.com", "openx.net", "rubiconproject.com", "popads.net",
+        "popcash.net", "propellerads.com", "exoclick.com", "mgid.com",
+        "amazon-adsystem.com", "adroll.com", "bidswitch.net", "casalemedia.com",
+        "flashtalking.com", "hotjar.com", "scorecardresearch.com", "quantserve.com"
     };
-    private static final String[] AD_PATH_MARKERS = {
+    private static final String[] AD_PATHS = {
         "/ads/", "/adserver/", "/advertising/", "/banner-ad", "/popunder",
-        "/pop-up", "/popup.php", "/tracking/", "/track.gif", "/pixel.gif",
-        "/analytics/", "/beacon/", "/impression", "/clicktracker", "/adchoices",
-        "/sponsor/", "/sponsored/", "/promoted/", "/affiliate/", "/retargeting/"
+        "/popup.php", "/clicktracker", "/adchoices", "/sponsor/", "/sponsored/",
+        "/promoted/", "/retargeting/"
     };
-    private EditText address;
-    private WebView web;
-    private LinearLayout mediaList;
-    private TextView pageStatus;
-    private int seq = 0;
-    private volatile int blockedRequests = 0;
-    private volatile boolean adBlockEnabled = true;
 
-    private int dp(float n) { return (int)(n * getResources().getDisplayMetrics().density + .5f); }
-    private GradientDrawable bg(int color, int radius, int stroke) {
-        GradientDrawable d = new GradientDrawable(); d.setColor(color); d.setCornerRadius(dp(radius));
-        if (stroke != 0) d.setStroke(dp(1), stroke); return d;
+    private LinearLayout root, topBar, bottomBar, mediaStrip;
+    private FrameLayout browserFrame;
+    private WebView web;
+    private EditText address;
+    private ProgressBar progress;
+    private TextView status, shieldBadge, pageTitle, mediaCount;
+    private View homePanel;
+    private boolean adBlockEnabled = true;
+    private boolean desktopMode = false;
+    private int blockedCount = 0;
+    private int tabCount = 1;
+    private int mediaCountValue = 0;
+    private int pageNumber = 0;
+
+    private int dp(float v) { return (int)(v * getResources().getDisplayMetrics().density + .5f); }
+
+    private GradientDrawable shape(int color, int radius, int stroke) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color); d.setCornerRadius(dp(radius));
+        if (stroke != 0) d.setStroke(dp(1), stroke);
+        return d;
     }
-    private TextView label(String s, int size, int color, boolean bold) {
-        TextView t = new TextView(this); t.setText(s); t.setTextSize(size); t.setTextColor(color);
-        t.setTypeface(Typeface.create("sans-serif", bold ? Typeface.BOLD : Typeface.NORMAL)); return t;
+
+    private TextView text(String value, int size, int color, boolean bold) {
+        TextView t = new TextView(this);
+        t.setText(value); t.setTextSize(size); t.setTextColor(color);
+        t.setTypeface(Typeface.create("sans-serif", bold ? Typeface.BOLD : Typeface.NORMAL));
+        return t;
     }
-    private Button button(String s, boolean primary) {
-        Button b = new Button(this); b.setText(s); b.setAllCaps(false); b.setTextSize(13);
-        b.setTextColor(primary ? BG : WHITE); b.setTypeface(Typeface.DEFAULT_BOLD);
-        b.setBackground(bg(primary ? CYAN : PANEL, 12, primary ? 0 : Color.rgb(40,60,88)));
-        b.setMinHeight(dp(44)); return b;
+
+    private Button btn(String value, boolean primary) {
+        Button b = new Button(this);
+        b.setText(value); b.setAllCaps(false); b.setTextSize(13);
+        b.setTextColor(primary ? BG : WHITE);
+        b.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        b.setBackground(shape(primary ? CYAN : CARD, 13, primary ? 0 : BORDER));
+        b.setMinHeight(dp(42)); b.setPadding(dp(8), 0, dp(8), 0);
+        return b;
+    }
+
+    private LinearLayout column() {
+        LinearLayout l = new LinearLayout(this); l.setOrientation(LinearLayout.VERTICAL); return l;
+    }
+
+    private LinearLayout row() {
+        LinearLayout l = new LinearLayout(this); l.setOrientation(LinearLayout.HORIZONTAL);
+        l.setGravity(Gravity.CENTER_VERTICAL); return l;
+    }
+
+    private LinearLayout.LayoutParams lp(int w, int h) { return new LinearLayout.LayoutParams(w, h); }
+    private LinearLayout.LayoutParams margin(int w, int h, int left, int top, int right, int bottom) {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(w, h);
+        p.setMargins(dp(left), dp(top), dp(right), dp(bottom)); return p;
     }
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().setStatusBarColor(BG); getWindow().setNavigationBarColor(BG);
-        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(BG); root.setPadding(dp(14), dp(8), dp(14), dp(6));
-        root.setOnApplyWindowInsetsListener((v, insets) -> {
-            int top, bottom;
-            if (android.os.Build.VERSION.SDK_INT >= 30) {
-                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars()); top = bars.top; bottom = bars.bottom;
-            } else { top = insets.getSystemWindowInsetTop(); bottom = insets.getSystemWindowInsetBottom(); }
-            v.setPadding(dp(14), top + dp(8), dp(14), bottom + dp(6)); return insets;
-        });
-        LinearLayout head = new LinearLayout(this); head.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        Button back = button("‹", false); head.addView(back, new LinearLayout.LayoutParams(dp(46), dp(44)));
-        TextView title = label("SaifNest Browser", 20, CYAN, true);
-        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, -2, 1); tp.leftMargin = dp(10); head.addView(title, tp);
-        Button downloads = button("↓", false); head.addView(downloads, new LinearLayout.LayoutParams(dp(46), dp(44)));
-        Button blocker = button("🛡", true); LinearLayout.LayoutParams blockerP = new LinearLayout.LayoutParams(dp(46), dp(44)); blockerP.leftMargin = dp(6); head.addView(blocker, blockerP);
-        Button refresh = button("↻", false); LinearLayout.LayoutParams refreshP = new LinearLayout.LayoutParams(dp(46), dp(44)); refreshP.leftMargin = dp(6); head.addView(refresh, refreshP);
-        root.addView(head);
-        LinearLayout bar = new LinearLayout(this); bar.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        address = new EditText(this); address.setSingleLine(true); address.setTextSize(14); address.setTextColor(WHITE);
-        address.setHintTextColor(MUTED); address.setHint("Enter website URL"); address.setImeOptions(EditorInfo.IME_ACTION_GO);
-        address.setPadding(dp(12), 0, dp(8), 0); address.setBackground(bg(PANEL, 12, Color.rgb(40,60,88)));
-        bar.addView(address, new LinearLayout.LayoutParams(0, dp(48), 1));
-        Button go = button("Go", true); LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(dp(60), dp(48)); gp.leftMargin = dp(7); bar.addView(go, gp);
-        root.addView(bar, lp(-1, -2, 10));
-        pageStatus = label("Open a page; detected media sources appear below.", 12, MUTED, false);
-        root.addView(pageStatus, lp(-1, -2, 8));
+        getWindow().getDecorView().setSystemUiVisibility(0);
 
-        web = new WebView(this); web.setBackgroundColor(BG);
-        web.getSettings().setJavaScriptEnabled(true); web.getSettings().setDomStorageEnabled(true);
-        web.getSettings().setMediaPlaybackRequiresUserGesture(true); web.getSettings().setLoadsImagesAutomatically(true);
+        root = column(); root.setBackgroundColor(BG);
+        root.setPadding(dp(14), dp(8), dp(14), dp(5));
+        root.setOnApplyWindowInsetsListener((v, insets) -> {
+            int top = 0, bottom = 0;
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                top = bars.top; bottom = bars.bottom;
+            } else { top = insets.getSystemWindowInsetTop(); bottom = insets.getSystemWindowInsetBottom(); }
+            v.setPadding(dp(14), top + dp(6), dp(14), bottom + dp(4));
+            return insets;
+        });
+
+        buildTopBar();
+        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(100); progress.setProgressTintList(android.content.res.ColorStateList.valueOf(CYAN));
+        progress.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(SURFACE));
+        root.addView(progress, lp(-1, dp(2)));
+
+        browserFrame = new FrameLayout(this);
+        LinearLayout.LayoutParams frameP = new LinearLayout.LayoutParams(-1, 0, 1);
+        frameP.topMargin = dp(8); frameP.bottomMargin = dp(8);
+        root.addView(browserFrame, frameP);
+        buildBottomBar();
+        setContentView(root, new ViewGroup.LayoutParams(-1, -1));
+        root.requestApplyInsets();
+        showHome();
+
+        String initial = getIntent().getStringExtra("url");
+        if (initial != null && isHttp(initial)) loadUrl(initial);
+    }
+
+    private void buildTopBar() {
+        topBar = row();
+        LinearLayout brand = column();
+        TextView logo = text("S", 23, CYAN, true);
+        logo.setGravity(Gravity.CENTER); logo.setBackground(shape(CARD, 13, BORDER));
+        brand.addView(logo, lp(dp(42), dp(42)));
+        topBar.addView(brand, margin(dp(42), dp(42), 0, 0, 10, 0));
+
+        LinearLayout titleStack = column();
+        titleStack.addView(text("SaifNest", 18, WHITE, true));
+        TextView subtitle = text("PRIVATE • FAST • MEDIA", 9, MUTED, true);
+        LinearLayout.LayoutParams subP = lp(-2, -2); subP.topMargin = dp(1); titleStack.addView(subtitle, subP);
+        topBar.addView(titleStack, new LinearLayout.LayoutParams(0, -2, 1));
+
+        Button tabs = btn(String.valueOf(tabCount), false);
+        tabs.setMinWidth(dp(42));
+        topBar.addView(tabs, margin(dp(42), dp(40), 5, 0, 5, 0));
+        tabs.setOnClickListener(v -> showTabs());
+
+        Button more = btn("⋮", false);
+        topBar.addView(more, lp(dp(42), dp(40)));
+        more.setOnClickListener(v -> showTools());
+        root.addView(topBar);
+    }
+
+    private void buildAddressBar() {
+        LinearLayout bar = row();
+        bar.setPadding(dp(8), dp(5), dp(5), dp(5));
+        bar.setBackground(shape(SURFACE, 17, BORDER));
+
+        TextView lock = text("⌕", 20, CYAN, true);
+        lock.setGravity(Gravity.CENTER);
+        bar.addView(lock, lp(dp(30), dp(38)));
+
+        address = new EditText(this);
+        address.setSingleLine(true); address.setTextSize(14); address.setTextColor(WHITE);
+        address.setHintTextColor(MUTED); address.setHint("Search or enter address");
+        address.setImeOptions(EditorInfo.IME_ACTION_GO);
+        address.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        address.setSelectAllOnFocus(false); address.setPadding(dp(3), 0, dp(3), 0);
+        address.setBackgroundColor(Color.TRANSPARENT);
+        bar.addView(address, new LinearLayout.LayoutParams(0, dp(38), 1));
+
+        Button reload = btn("↻", false);
+        bar.addView(reload, lp(dp(40), dp(38)));
+        reload.setOnClickListener(v -> { if (web != null && web.getVisibility() == View.VISIBLE) web.reload(); else showHome(); });
+        address.setOnEditorActionListener((v, action, event) -> {
+            if (action == EditorInfo.IME_ACTION_GO || action == EditorInfo.IME_ACTION_DONE) { loadAddress(); return true; }
+            return false;
+        });
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
+        p.topMargin = dp(12); root.addView(bar, p);
+    }
+
+    private void buildBottomBar() {
+        bottomBar = row();
+        bottomBar.setGravity(Gravity.CENTER);
+        bottomBar.setPadding(dp(3), dp(5), dp(3), dp(3));
+        bottomBar.setBackground(shape(SURFACE, 18, BORDER));
+        String[] labels = {"⌂\nHome", "◉\nTabs", "↓\nMedia", "✦\nTools"};
+        Runnable[] actions = {
+            this::showHome, this::showTabs,
+            () -> startActivity(new Intent(this, MediaLibraryActivity.class)),
+            this::showTools
+        };
+        for (int i = 0; i < labels.length; i++) {
+            final int index = i;
+            TextView item = text(labels[i], 11, i == 0 ? CYAN : MUTED, true);
+            item.setGravity(Gravity.CENTER);
+            item.setPadding(dp(5), dp(4), dp(5), dp(4));
+            bottomBar.addView(item, new LinearLayout.LayoutParams(0, dp(50), 1));
+            item.setOnClickListener(v -> actions[index].run());
+        }
+        root.addView(bottomBar);
+    }
+
+    private void ensureWebView() {
+        if (web != null) return;
+        web = new WebView(this); web.setBackgroundColor(Color.WHITE);
+        web.getSettings().setJavaScriptEnabled(true);
+        web.getSettings().setDomStorageEnabled(true);
+        web.getSettings().setMediaPlaybackRequiresUserGesture(true);
+        web.getSettings().setLoadsImagesAutomatically(true);
         web.getSettings().setSupportMultipleWindows(false);
+        web.getSettings().setBuiltInZoomControls(true); web.getSettings().setDisplayZoomControls(false);
         web.addJavascriptInterface(new MediaBridge(), "SaifNestBridge");
         CookieManager.getInstance().setAcceptCookie(true);
         if (android.os.Build.VERSION.SDK_INT >= 21) CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
         web.setWebChromeClient(new WebChromeClient() {
-            @Override public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
-                if (adBlockEnabled) {
-                    runOnUiThread(() -> pageStatus.setText("Blocked a pop-up window"));
-                    return false;
-                }
-                return super.onCreateWindow(view, isDialog, isUserGesture, resultMsg);
+            @Override public void onProgressChanged(WebView view, int value) {
+                progress.setProgress(value); progress.setVisibility(value >= 100 ? View.GONE : View.VISIBLE);
+            }
+            @Override public void onReceivedTitle(WebView view, String title) {
+                if (title != null && !title.trim().isEmpty()) pageTitle.setText(title);
+            }
+            @Override public boolean onCreateWindow(WebView view, boolean dialog, boolean userGesture, android.os.Message resultMsg) {
+                if (adBlockEnabled) { toast("Pop-up blocked"); return false; }
+                return false;
             }
         });
         web.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String target = request.getUrl().toString();
                 if (request.isForMainFrame() && adBlockEnabled && isHttp(target) && isAdRequest(target)) {
-                    blockedRequests++;
-                    pageStatus.setText("Blocked an advertising redirect · " + blockedRequests + " requests blocked");
-                    return true;
+                    blockedCount++; updateShield(); return true;
                 }
-                if (request.isForMainFrame()) address.setText(target);
+                if (request.isForMainFrame()) {
+                    address.setText(target); status.setText("Loading website…");
+                }
                 return false;
             }
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                address.setText(url); pageStatus.setText("Loading page…"); 
+                address.setText(url); status.setText("Loading website…"); pageNumber++;
+                pageTitle.setText("Loading…");
+                if (homePanel != null) homePanel.setVisibility(View.GONE);
             }
             @Override public void onPageFinished(WebView view, String url) {
-                address.setText(url); pageStatus.setText("Watching page resources for supported media…");
-                // DOM discovery complements network request observation; this cannot see every blob/DRM stream.
-                String js = "(function(){var a=[];function add(u){if(u&&a.indexOf(u)<0)a.push(u)};" +
-                        "document.querySelectorAll('video,audio,video source,audio source,source').forEach(function(e){add(e.currentSrc||e.src||e.getAttribute('src'))});" +
-                        "performance.getEntriesByType('resource').forEach(function(e){if(/\\.(mp4|m4v|webm|mov|mkv|mp3|m4a|aac|ogg|opus|m3u8|mpd)(?:$|[?#])/i.test(e.name)||/videoplayback|\\/media\\//i.test(e.name))add(e.name)});" +
-                        "document.querySelectorAll(\"meta[property='og:video'],meta[name='twitter:player:stream'],link[rel='preload'][as='video']\").forEach(function(e){add(e.content||e.href)});" +
-                        "return JSON.stringify(a)})()";
-                view.evaluateJavascript("(function(){try{" +
-                        "window.open=function(){return null};" +
-                        "var css='iframe[src*=\\\"ad\\\"],iframe[id*=\\\"ad\\\"],[id*=\\\"advertisement\\\"],[class*=\\\"advertisement\\\"],[id*=\\\"ad-container\\\"],[class*=\\\"ad-container\\\"],[id*=\\\"ad-slot\\\"],[class*=\\\"ad-slot\\\"],[id*=\\\"ad-banner\\\"],[class*=\\\"ad-banner\\\"],[class*=\\\"sponsor\\\"],[id*=\\\"sponsor\\\"],[class*=\\\"popunder\\\"],[id*=\\\"popunder\\\"],[class*=\\\"cookie-consent-ad\\\"]{display:none!important;visibility:hidden!important;pointer-events:none!important;max-height:0!important;min-height:0!important;overflow:hidden!important}';" +
-                        "var s=document.getElementById('saifnest-ad-style');if(!s){s=document.createElement('style');s.id='saifnest-ad-style';s.textContent=css;(document.head||document.documentElement).appendChild(s)}" +
-                        "var anti=/disable your ad blocker|please disable ad blocker|ad blocker detected|turn off your ad blocker|adblock detected|advertising blocker/i;" +
-                        "function clean(){try{" +
-                        "document.querySelectorAll('iframe,div,section,aside,dialog,article').forEach(function(e){" +
-                        "if(e.id==='saifnest-ad-style'||e.closest('video,main,article[data-content],.article-content'))return;" +
-                        "var t=((e.innerText||e.textContent||'').slice(0,500)).toLowerCase();" +
-                        "if(anti.test(t)&&e.children.length<12){e.style.setProperty('display','none','important');e.setAttribute('data-saifnest-cleaned','anti-adblock');}" +
-                        "var id=(e.id||'').toLowerCase(),cl=(typeof e.className==='string'?e.className:'').toLowerCase();" +
-                        "if(/(^|[-_ ])(adslot|ad-slot|advertisement|ad-container|banner-ad|popunder|sponsor-box)([-_ ]|$)/.test(id+' '+cl)){e.style.setProperty('display','none','important');}" +
-                        "});" +
-                        "document.querySelectorAll('a[target=_blank]').forEach(function(a){a.setAttribute('rel','noopener noreferrer');});" +
-                        "}catch(e){}}clean();new MutationObserver(clean).observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','id','style']});" +
-                        "}catch(e){};return true})()", ignored -> {});
-                String observer = "(function(){try{" +
-                        "function scan(){try{document.querySelectorAll('video,audio,video source,audio source').forEach(function(e){" +
-                        "var u=e.currentSrc||e.src||e.getAttribute('src');if(u&&/^https?:\\/\\//i.test(u))SaifNestBridge.found(u,e.tagName==='AUDIO'?'Audio element':'Video element');" +
-                        "});performance.getEntriesByType('resource').forEach(function(e){" +
-                        "if(/^https?:\\/\\//i.test(e.name)&&(/\\.(mp4|m4v|webm|mov|mkv|mp3|m4a|aac|ogg|opus|m3u8|mpd)(?:$|[?#])/i.test(e.name)||/videoplayback|\\/media\\//i.test(e.name)))SaifNestBridge.found(e.name,'Loaded media resource');" +
-                        "}catch(x){}}scan();new MutationObserver(scan).observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['src']});" +
-                        "document.addEventListener('play',function(e){if(e.target&&e.target.tagName==='VIDEO'){var u=e.target.currentSrc||e.target.src;if(u&&/^https?:\\/\\//i.test(u))SaifNestBridge.found(u,'Playing video');}},true);" +
-                        "}catch(e){}})();";
-                view.evaluateJavascript(observer, ignored -> {});
-                view.evaluateJavascript(js, value -> {
+                address.setText(url); status.setText("Ready · " + blockedCount + " ads blocked");
+                injectPageTools(view);
+                String scan = "(function(){try{var a=[];function add(u){if(u&&/^https?:\\/\\//i.test(u)&&a.indexOf(u)<0)a.push(u)};" +
+                    "document.querySelectorAll('video,audio,video source,audio source,source').forEach(function(e){add(e.currentSrc||e.src||e.getAttribute('src'))});" +
+                    "performance.getEntriesByType('resource').forEach(function(e){if(/\\.(mp4|m4v|webm|mov|mkv|avi|mp3|m4a|aac|ogg|opus|m3u8|mpd)(?:$|[?#])/i.test(e.name)||/videoplayback|\\/media\\//i.test(e.name))add(e.name)});" +
+                    "return JSON.stringify(a)}catch(e){return '[]'}})()";
+                view.evaluateJavascript(scan, value -> {
                     try {
                         if (value == null || "null".equals(value)) return;
-                        JSONArray array = new JSONArray(value);
-                        for (int i=0; i<array.length(); i++) addMedia(array.optString(i), "Page video/audio element");
-                    } catch (Exception ignored) { }
+                        JSONArray arr = new JSONArray(value);
+                        for (int i=0; i<arr.length(); i++) addMedia(arr.optString(i), "Browser resource");
+                    } catch (Exception ignored) {}
                 });
             }
-            @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
                 if (adBlockEnabled && isHttp(url) && isAdRequest(url)) {
-                    blockedRequests++;
-                    runOnUiThread(() -> pageStatus.setText("Ad blocker active · " + blockedRequests + " requests blocked"));
-                    return new WebResourceResponse("text/plain", "utf-8",
-                            new ByteArrayInputStream(new byte[0]));
+                    synchronized (BrowserActivity.this) { blockedCount++; }
+                    runOnUiThread(() -> updateShield());
+                    return new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(new byte[0]));
                 }
-                if (isHttp(url) && looksLikeMedia(url)) addMedia(url, "Browser network request");
+                if (isHttp(url)) addMedia(url, "Network resource");
                 return super.shouldInterceptRequest(view, request);
             }
         });
+    }
 
-        // Browser occupies the main area; detected sources are in a compact, independently scrollable drawer.
-        root.addView(web, new LinearLayout.LayoutParams(-1, 0, 1));
-        TextView mediaHeader = label("Detected media", 16, WHITE, true);
-        root.addView(mediaHeader, lp(-1, -2, 10));
-        ScrollView results = new ScrollView(this); results.setFillViewport(false);
-        mediaList = new LinearLayout(this); mediaList.setOrientation(LinearLayout.VERTICAL);
-        results.addView(mediaList); root.addView(results, lp(-1, dp(150), 6));
-        setContentView(root, new ViewGroup.LayoutParams(-1, -1)); root.requestApplyInsets();
+    private void injectPageTools(WebView view) {
+        String script = "(function(){try{window.open=function(){return null};" +
+            "var css='iframe[src*=\\\"ad\\\"],iframe[id*=\\\"ad\\\"],[id*=\\\"advertisement\\\"],[class*=\\\"advertisement\\\"],[id*=\\\"ad-container\\\"],[class*=\\\"ad-container\\\"],[id*=\\\"ad-slot\\\"],[class*=\\\"ad-slot\\\"],[class*=\\\"popunder\\\"]{display:none!important;visibility:hidden!important;pointer-events:none!important;max-height:0!important;overflow:hidden!important}';" +
+            "var s=document.getElementById('saifnest-style');if(!s){s=document.createElement('style');s.id='saifnest-style';s.textContent=css;(document.head||document.documentElement).appendChild(s)}" +
+            "var anti=/disable your ad blocker|ad blocker detected|turn off your ad blocker|adblock detected/i;" +
+            "function clean(){document.querySelectorAll('div,section,aside,dialog').forEach(function(e){if(e.closest('main,article,video'))return;var t=(e.innerText||'').slice(0,400);if(anti.test(t)&&e.children.length<10)e.style.setProperty('display','none','important')})}" +
+            "clean();new MutationObserver(clean).observe(document.documentElement,{subtree:true,childList:true});}catch(e){}})()";
+        view.evaluateJavascript(script, null);
+    }
 
-        back.setOnClickListener(v -> { if (web.canGoBack()) web.goBack(); else finish(); });
-        downloads.setOnClickListener(v -> startActivity(new Intent(this, MediaLibraryActivity.class)));
-        blocker.setOnClickListener(v -> {
-            adBlockEnabled = !adBlockEnabled;
-            blocker.setText(adBlockEnabled ? "🛡" : "Shield OFF");
-            blocker.setTextColor(adBlockEnabled ? BG : WHITE);
-            blocker.setBackground(bg(adBlockEnabled ? CYAN : PANEL, 12, 0));
-            Toast.makeText(this, adBlockEnabled ? "Ad blocker enabled" : "Ad blocker paused for this session", Toast.LENGTH_SHORT).show();
-            web.reload();
+    private void showHome() {
+        ensureWebView();
+        browserFrame.removeAllViews();
+        if (web.getParent() instanceof ViewGroup) ((ViewGroup) web.getParent()).removeView(web);
+        homePanel = column(); homePanel.setBackgroundColor(BG);
+        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true);
+        LinearLayout content = column(); content.setPadding(dp(3), dp(5), dp(3), dp(12));
+        LinearLayout hero = column(); hero.setPadding(dp(20), dp(22), dp(20), dp(20));
+        hero.setBackground(shape(CARD, 22, BORDER));
+        TextView eyebrow = text("YOUR WEB, YOUR WAY", 10, CYAN, true);
+        hero.addView(eyebrow);
+        TextView heading = text("Browse beyond.", 28, WHITE, true);
+        LinearLayout.LayoutParams hp = lp(-1, -2); hp.topMargin = dp(8); hero.addView(heading, hp);
+        TextView desc = text("A cleaner browser with built-in media discovery and quick tools.", 13, MUTED, false);
+        desc.setLineSpacing(dp(3), 1f); LinearLayout.LayoutParams descP = lp(-1, -2); descP.topMargin = dp(5); hero.addView(desc, descP);
+        LinearLayout chips = row(); chips.setGravity(Gravity.LEFT);
+        chips.addView(chip("🛡  Ad shield"));
+        chips.addView(chip("▶  Media finder"), margin(-2, dp(30), 7, 12, 0, 0));
+        hero.addView(chips);
+        content.addView(hero, margin(-1, -2, 0, 6, 0, 0));
+
+        TextView quickTitle = text("QUICK ACCESS", 11, MUTED, true);
+        content.addView(quickTitle, margin(-1, -2, 4, 22, 0, 8));
+        LinearLayout grid1 = row(), grid2 = row();
+        addShortcut(grid1, "G", "Google", "https://www.google.com", Color.rgb(66,133,244));
+        addShortcut(grid1, "▶", "YouTube", "https://m.youtube.com", Color.rgb(255,75,75));
+        addShortcut(grid1, "W", "Wikipedia", "https://www.wikipedia.org", Color.rgb(100,116,139));
+        addShortcut(grid2, "GH", "GitHub", "https://github.com", Color.rgb(100,116,139));
+        addShortcut(grid2, "N", "News", "https://news.google.com", Color.rgb(77,218,255));
+        addShortcut(grid2, "＋", "Add site", "", CYAN);
+        content.addView(grid1, lp(-1, dp(94)));
+        content.addView(grid2, margin(-1, dp(94), 0, 8, 0, 0));
+
+        LinearLayout utility = column(); utility.setPadding(dp(15), dp(14), dp(15), dp(14));
+        utility.setBackground(shape(SURFACE, 18, BORDER));
+        TextView utilityTitle = text("BROWSER STATUS", 11, CYAN, true); utility.addView(utilityTitle);
+        status = text("Ready to browse · Ad shield on", 13, WHITE, false);
+        utility.addView(status, margin(-1, -2, 0, 7, 0, 0));
+        mediaCount = text(mediaCountValue + " media sources found this session", 12, MUTED, false);
+        utility.addView(mediaCount, margin(-1, -2, 0, 4, 0, 0));
+        content.addView(utility, margin(-1, -2, 0, 22, 0, 0));
+        TextView footer = text("SaifNest Browser  •  Built for Android", 11, MUTED, false);
+        footer.setGravity(Gravity.CENTER);
+        content.addView(footer, margin(-1, dp(40), 0, 12, 0, 0));
+        scroll.addView(content); homePanel.addView(scroll);
+        browserFrame.addView(homePanel, new FrameLayout.LayoutParams(-1, -1));
+        web.setVisibility(View.GONE);
+        address.setText(""); address.setHint("Search or enter address");
+        progress.setVisibility(View.GONE);
+    }
+
+    private View chip(String label) {
+        TextView t = text(label, 10, WHITE, true); t.setGravity(Gravity.CENTER);
+        t.setPadding(dp(10), dp(6), dp(10), dp(6)); t.setBackground(shape(SURFACE, 30, BORDER));
+        return t;
+    }
+
+    private void addShortcut(LinearLayout parent, String iconText, String name, String url, int color) {
+        LinearLayout tile = column(); tile.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, -1, 1);
+        p.setMargins(dp(3), dp(3), dp(3), dp(3)); parent.addView(tile, p);
+        TextView icon = text(iconText, 18, color, true); icon.setGravity(Gravity.CENTER);
+        icon.setBackground(shape(CARD, 18, BORDER)); tile.addView(icon, lp(dp(48), dp(48)));
+        TextView title = text(name, 11, WHITE, false); title.setGravity(Gravity.CENTER);
+        tile.addView(title, margin(-1, -2, 0, 5, 0, 0));
+        tile.setOnClickListener(v -> {
+            if (url == null || url.isEmpty()) {
+                EditText input = new EditText(this); input.setSingleLine(true); input.setHint("https://example.com");
+                new AlertDialog.Builder(this).setTitle("Add quick site").setView(input)
+                    .setPositiveButton("Open", (d,w) -> { String s=input.getText().toString().trim(); if(!s.isEmpty()) loadUrl(s); })
+                    .setNegativeButton("Cancel", null).show();
+            } else loadUrl(url);
         });
-        refresh.setOnClickListener(v -> web.reload());
-        go.setOnClickListener(v -> loadAddress());
-        address.setOnEditorActionListener((v, action, event) -> {
-            if (action == EditorInfo.IME_ACTION_GO || action == EditorInfo.IME_ACTION_DONE) { loadAddress(); return true; }
-            return false;
-        });
-        String initial = getIntent().getStringExtra("url");
-        if (initial != null && isHttp(initial)) { address.setText(initial); web.loadUrl(initial); }
-        else {
-            address.setText("https://www.google.com");
-            web.loadUrl("https://www.google.com");
+    }
+
+    private void loadUrl(String value) {
+        if (value == null) return;
+        value = value.trim();
+        if (value.isEmpty()) return;
+        if (!value.matches("(?i)^https?://.*")) {
+            if (value.contains(" ") || !value.contains(".")) value = "https://www.google.com/search?q=" + Uri.encode(value);
+            else value = "https://" + value;
         }
+        if (!isHttp(value)) { toast("Enter a valid website or search term"); return; }
+        ensureWebView();
+        browserFrame.removeAllViews();
+        if (web.getParent() instanceof ViewGroup) ((ViewGroup) web.getParent()).removeView(web);
+        homePanel = null;
+        web.setVisibility(View.VISIBLE);
+        browserFrame.addView(web, new FrameLayout.LayoutParams(-1, -1));
+        address.setText(value); progress.setVisibility(View.VISIBLE); progress.setProgress(5);
+        status.setText("Loading website…"); web.loadUrl(value);
     }
 
-    private LinearLayout.LayoutParams lp(int w, int h, int top) {
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(w,h); p.topMargin=dp(top); return p;
-    }
-    private void loadAddress() {
-        String value = address.getText().toString().trim();
-        if (!value.matches("(?i)^https?://.*")) value = "https://" + value;
-        if (!isHttp(value)) { address.setError("Enter a valid HTTP(S) URL"); return; }
-        web.loadUrl(value);
-    }
-    private boolean isHttp(String s) {
-        try { Uri u=Uri.parse(s); return u.getHost()!=null && ("http".equalsIgnoreCase(u.getScheme()) || "https".equalsIgnoreCase(u.getScheme())); }
-        catch (Exception e) { return false; }
+    private void showTabs() {
+        String current = web == null ? "" : web.getUrl();
+        String title = web != null && web.getTitle() != null ? web.getTitle() : "SaifNest Home";
+        new AlertDialog.Builder(this).setTitle("Tabs · " + tabCount)
+            .setMessage(title + (current == null ? "" : "\n" + current) + "\n\nSingle-tab preview. Multi-tab session manager is a future upgrade.")
+            .setPositiveButton("New tab", (d,w) -> { tabCount++; showHome(); updateTabCount(); })
+            .setNeutralButton("Reload", (d,w) -> { if(web!=null) web.reload(); })
+            .setNegativeButton("Close tab", (d,w) -> { tabCount=Math.max(1,tabCount-1); showHome(); updateTabCount(); }).show();
     }
 
-    private boolean isAdRequest(String rawUrl) {
-        try {
-            Uri uri = Uri.parse(rawUrl);
-            String host = uri.getHost();
-            if (host == null) return false;
-            host = host.toLowerCase(Locale.ROOT);
-            for (String domain : AD_HOSTS) {
-                String normalized = domain.trim();
-                if (!normalized.isEmpty() && (host.equals(normalized) || host.endsWith("." + normalized))) return true;
+    private void updateTabCount() {
+        if (topBar != null && topBar.getChildCount() > 2 && topBar.getChildAt(2) instanceof Button)
+            ((Button)topBar.getChildAt(2)).setText(String.valueOf(tabCount));
+    }
+
+    private void showTools() {
+        String[] tools = {
+            adBlockEnabled ? "🛡  Ad shield: ON" : "🛡  Ad shield: OFF",
+            "▶  Detected media & downloads",
+            "⌕  Find in page",
+            "▣  Share current page",
+            "⧉  Copy page link",
+            desktopMode ? "▤  Desktop site: ON" : "▤  Request desktop site",
+            "⌫  Clear browsing cache",
+            "↻  Reload page",
+            "⌂  Home"
+        };
+        new AlertDialog.Builder(this).setTitle("SaifNest tools").setItems(tools, (d, which) -> {
+            switch (which) {
+                case 0: adBlockEnabled=!adBlockEnabled; updateShield(); if(web!=null) web.reload(); toast(adBlockEnabled?"Ad shield enabled":"Ad shield paused"); break;
+                case 1: startActivity(new Intent(this, MediaLibraryActivity.class)); break;
+                case 2: if(web!=null) { EditText q=new EditText(this); q.setSingleLine(true); q.setHint("Find text"); new AlertDialog.Builder(this).setTitle("Find in page").setView(q).setPositiveButton("Find",(a,b)->web.findAllAsync(q.getText().toString())).setNegativeButton("Cancel",null).show(); } break;
+                case 3: sharePage(); break;
+                case 4: copyPage(); break;
+                case 5: desktopMode=!desktopMode; ensureWebView(); web.getSettings().setUserAgentString(desktopMode ? "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/125.0.0.0 Safari/537.36" : null); if(web!=null) web.reload(); toast(desktopMode?"Desktop mode requested":"Mobile mode requested"); break;
+                case 6: if(web!=null) web.clearCache(true); CookieManager.getInstance().flush(); toast("Browser cache cleared"); break;
+                case 7: if(web!=null) web.reload(); break;
+                case 8: showHome(); break;
             }
-            String path = (uri.getPath() == null ? "" : uri.getPath()).toLowerCase(Locale.ROOT);
-            String query = (uri.getEncodedQuery() == null ? "" : uri.getEncodedQuery()).toLowerCase(Locale.ROOT);
-            String full = path + "?" + query;
-            for (String marker : AD_PATH_MARKERS) if (full.contains(marker)) return true;
-            if (full.matches(".*[?&](ad|ads|ad_id|adunit|advert|campaign_id|click_id|doubleclick|utm_source=ad|sponsored)=.*")) return true;
-            String file = uri.getLastPathSegment();
-            return file != null && file.toLowerCase(Locale.ROOT).matches("(ads?|adserver|advert|tracking|pixel|beacon)([-_.].*)?\\.(js|gif|png|jpg|webp|html?)");
-        } catch (Exception ignored) { return false; }
+        }).show();
     }
 
-    private boolean looksLikeMedia(String url) {
-        return MediaDetectionEngine.looksLikeMedia(url);
+    private void sharePage() {
+        String url = web == null ? "" : web.getUrl();
+        if (url == null || url.isEmpty()) { toast("Open a page first"); return; }
+        Intent i = new Intent(Intent.ACTION_SEND); i.setType("text/plain");
+        i.putExtra(Intent.EXTRA_TEXT, url); startActivity(Intent.createChooser(i, "Share page"));
     }
 
-    private final class MediaBridge {
-        @JavascriptInterface
-        public void found(String url, String source) {
-            if (url == null || url.length() > 8192 || !isHttp(url)) return;
-            addMedia(url, source == null ? "Page media element" : source);
-        }
+    private void copyPage() {
+        String url = web == null ? "" : web.getUrl();
+        if (url == null || url.isEmpty()) { toast("Open a page first"); return; }
+        ClipboardManager cm = (ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+        cm.setPrimaryClip(ClipData.newPlainText("SaifNest page", url)); toast("Page link copied");
+    }
+
+    private void updateShield() {
+        if (shieldBadge != null) shieldBadge.setText((adBlockEnabled ? "Shield ON" : "Shield OFF") + " · " + blockedCount);
+        if (status != null) status.setText((adBlockEnabled ? "Ad shield active" : "Ad shield paused") + " · " + blockedCount + " blocked");
+    }
+
+    private boolean isAdRequest(String raw) {
+        try {
+            Uri u=Uri.parse(raw); String host=u.getHost();
+            if(host==null)return false; host=host.toLowerCase(Locale.ROOT);
+            for(String domain:AD_HOSTS) if(host.equals(domain)||host.endsWith("."+domain)) return true;
+            String path=(u.getPath()==null?"":u.getPath()).toLowerCase(Locale.ROOT);
+            String query=(u.getEncodedQuery()==null?"":u.getEncodedQuery()).toLowerCase(Locale.ROOT);
+            for(String marker:AD_PATHS) if(path.contains(marker)) return true;
+            return query.matches(".*[?&](ad|ads|ad_id|adunit|advert|campaign_id|click_id|sponsored)=.*");
+        } catch(Exception e){return false;}
+    }
+
+    private boolean isHttp(String value) {
+        try { Uri u=Uri.parse(value); return u.getHost()!=null && ("http".equalsIgnoreCase(u.getScheme())||"https".equalsIgnoreCase(u.getScheme())); }
+        catch(Exception e){return false;}
     }
 
     private void addMedia(String url, String source) {
-        if (!isHttp(url)) return;
-        MediaDetectionEngine.Candidate candidate = MediaDetectionEngine.inspect(url, "", source);
-        if (candidate == null || !found.add(candidate.identity)) return;
-        String mediaType = candidate.displayType() + " · " + candidate.confidence + "%";
-        String pageUrl = web == null ? "" : String.valueOf(web.getUrl());
-        SharedMediaStore.add(candidate.url, source, pageUrl);
+        if(!isHttp(url)) return;
+        MediaDetectionEngine.Candidate candidate=MediaDetectionEngine.inspect(url,"",source);
+        if(candidate==null || !found.add(candidate.identity)) return;
+        SharedMediaStore.add(candidate.url,source,web==null?"":String.valueOf(web.getUrl()));
         runOnUiThread(() -> {
-            seq++;
-            LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-            card.setPadding(dp(10), dp(8), dp(10), dp(8)); card.setBackground(bg(PANEL, 12, Color.rgb(35,52,78)));
-            TextView name = label(String.format(Locale.US, "%02d  ·  %s", seq, mediaType), 11, CYAN, true); card.addView(name);
-            TextView link = label(url, 11, WHITE, false); link.setMaxLines(2); link.setTextIsSelectable(true); card.addView(link, lp(-1,-2,4));
-            LinearLayout actions = new LinearLayout(this);
-            Button play = button("▶ Play", true), download = button("↓ Download", false);
-            actions.addView(play, new LinearLayout.LayoutParams(0,dp(40),1));
-            LinearLayout.LayoutParams dp = new LinearLayout.LayoutParams(0,dp(40),1); dp.leftMargin=dp(6); actions.addView(download,dp);
-            card.addView(actions, lp(-1,-2,5)); mediaList.addView(card,0,lp(-1,-2,5));
-            pageStatus.setText(found.size() + " media candidate(s) detected on this page");
-            play.setOnClickListener(v -> {
-                Intent i = new Intent(this, PlayerActivity.class);
-                i.setData(Uri.parse("saifnest://play?url=" + Uri.encode(url))); startActivity(i);
-            });
-            download.setOnClickListener(v -> {
-                String lower = url.toLowerCase(Locale.ROOT);
-                if (lower.contains(".m3u8") || lower.contains(".mpd")) {
-                    Toast.makeText(this, "This is an HLS/DASH stream. Stream downloading is not enabled yet; try Play.", Toast.LENGTH_LONG).show(); return;
-                }
-                try {
-                    String file = Uri.parse(url).getLastPathSegment();
-                    if (file == null || file.trim().isEmpty()) file = "saifnest-" + System.currentTimeMillis() + ".mp4";
-                    DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
-                    req.setTitle(file); req.setDescription("SaifNest browser download");
-                    req.setMimeType("video/*");
-                    req.addRequestHeader("User-Agent", web.getSettings().getUserAgentString());
-                    String cookie = CookieManager.getInstance().getCookie(url);
-                    if (cookie != null && !cookie.isEmpty()) req.addRequestHeader("Cookie", cookie);
-                    String referer = web.getUrl();
-                    if (referer != null && isHttp(referer)) req.addRequestHeader("Referer", referer);
-                    req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-                    req.setAllowedOverMetered(true); req.setAllowedOverRoaming(false);
-                    req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "SaifNest/" + file);
-                    ((DownloadManager)getSystemService(DOWNLOAD_SERVICE)).enqueue(req);
-                    Toast.makeText(this, "Download queued in Android Download Manager.", Toast.LENGTH_LONG).show();
-                } catch (Exception e) { Toast.makeText(this, "Download failed: " + e.getMessage(), Toast.LENGTH_LONG).show(); }
-            });
+            mediaCountValue++;
+            if(mediaCount!=null) mediaCount.setText(mediaCountValue+" media sources found this session");
+            if(status!=null) status.setText(candidate.displayType()+" detected · "+candidate.confidence+"% confidence");
         });
+    }
+
+    private final class MediaBridge {
+        @JavascriptInterface public void found(String url,String source) {
+            if(url!=null && url.length()<8192) addMedia(url,source==null?"Page media element":source);
+        }
+    }
+
+    private void toast(String message) { Toast.makeText(this,message,Toast.LENGTH_SHORT).show(); }
+
+    @Override public void onBackPressed() {
+        if(web!=null && web.getVisibility()==View.VISIBLE && web.canGoBack()) { web.goBack(); return; }
+        if(web!=null && web.getVisibility()==View.VISIBLE) { showHome(); return; }
+        super.onBackPressed();
     }
 }
