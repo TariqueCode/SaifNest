@@ -16,15 +16,16 @@ import android.widget.TextView;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Early native URL resolver/site scanner. Results are rendered incrementally in one scrollable list. */
+/** Native URL resolver/site scanner prototype with live, actionable result cards. */
 public final class MainActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private ScannerEngine scanner;
-    private TextView results;
+    private LinearLayout resultsList;
     private TextView status;
     private Button scanButton;
     private EditText urlInput;
     private boolean singleLinkMode = true;
+    private int candidateCount = 0;
 
     private int dp(float value) {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
@@ -80,7 +81,7 @@ public final class MainActivity extends Activity {
 
         urlInput = new EditText(this);
         urlInput.setSingleLine(true);
-        urlInput.setHint("https://example.com/video");
+        urlInput.setHint("Paste a video page or direct media URL");
         urlInput.setHintTextColor(Color.rgb(112, 128, 155));
         urlInput.setTextColor(Color.WHITE);
         urlInput.setTextSize(14);
@@ -101,11 +102,15 @@ public final class MainActivity extends Activity {
         statusParams.topMargin = dp(7);
         root.addView(status, statusParams);
 
-        results = text("Detected videos and media candidates will appear here.\n\nThis prototype scans public HTML and common direct media URLs. Some JavaScript players and protected streams may not expose a downloadable URL.", 13, Color.rgb(207, 219, 239), false);
-        results.setPadding(dp(4), dp(8), dp(4), dp(18));
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(false);
-        scroll.addView(results);
+        resultsList = new LinearLayout(this);
+        resultsList.setOrientation(LinearLayout.VERTICAL);
+        resultsList.setPadding(0, dp(8), 0, dp(18));
+        resultsList.addView(text(
+                "Detected videos and media candidates will appear here.\n\nThis prototype scans public HTML and common direct media URLs. Some JavaScript players and protected streams may not expose a downloadable URL.",
+                13, Color.rgb(207, 219, 239), false));
+        scroll.addView(resultsList);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
         setContentView(root, new ViewGroup.LayoutParams(-1, -1));
 
@@ -119,9 +124,8 @@ public final class MainActivity extends Activity {
             singleLinkMode = false;
             scanButton.setText("Scan site");
             urlInput.setHint("Website URL, e.g. https://example.com");
-            status.setText("Website mode • limited prototype crawl");
+            status.setText("Website mode • up to 100 pages");
         });
-
         scanButton.setOnClickListener(v -> startScan());
         stop.setOnClickListener(v -> {
             if (scanner != null) scanner.cancel();
@@ -140,7 +144,8 @@ public final class MainActivity extends Activity {
         if (scanner != null) scanner.cancel();
         scanner = new ScannerEngine();
         ScannerEngine active = scanner;
-        results.setText("");
+        resultsList.removeAllViews();
+        candidateCount = 0;
         scanButton.setEnabled(false);
         status.setText(singleLinkMode ? "Resolving link…" : "Scanning website…");
         int pageLimit = singleLinkMode ? 1 : 100;
@@ -153,37 +158,62 @@ public final class MainActivity extends Activity {
             }
 
             @Override public void onCandidate(String pageUrl, String mediaUrl, String kind) {
-                runOnUiThread(() -> {
-                    String item = "\n━━━━━━━━━━━━━━━━━━━━\n" + kind + "\n" + mediaUrl
-                            + "\nSource: " + pageUrl + "\n";
-                    results.append(item);
-                    Button play = button("▶  Play in SaifNest");
-                    play.setOnClickListener(v -> {
-                        Intent intent = new Intent(MainActivity.this, PlayerActivity.class);
-                        intent.setData(Uri.parse("saifnest://play?url=" + Uri.encode(mediaUrl)));
-                        startActivity(intent);
-                    });
-                    // Keep result actions inside the scrollable results area instead of
-                    // adding unbounded buttons to the outer screen layout.
-                    ViewGroup parent = (ViewGroup) results.getParent();
-                    if (parent instanceof ScrollView) {
-                        // TextView remains the compact live list in this milestone.
-                        results.append("\nAction: tap Play is being added to the full library UI.\n");
-                    }
-                });
+                runOnUiThread(() -> addCandidate(pageUrl, mediaUrl, kind));
             }
 
             @Override public void onError(String url, String message) {
-                runOnUiThread(() -> results.append("\nCould not inspect " + url + "\n" + message + "\n"));
+                runOnUiThread(() -> {
+                    TextView error = text("Could not inspect: " + url + "\n" + message,
+                            12, Color.rgb(255, 170, 145), false);
+                    error.setPadding(dp(8), dp(8), dp(8), dp(8));
+                    resultsList.addView(error);
+                });
             }
 
-            @Override public void onFinished(int pagesVisited, int candidateCount) {
+            @Override public void onFinished(int pagesVisited, int count) {
                 runOnUiThread(() -> {
-                    status.setText("Finished • pages: " + pagesVisited + " • media candidates: " + candidateCount);
+                    status.setText("Finished • pages: " + pagesVisited + " • media candidates: " + count);
                     scanButton.setEnabled(true);
+                    if (count == 0) resultsList.addView(text(
+                            "No direct media candidates found. The page may use JavaScript, a protected player, or a format this prototype does not recognize.",
+                            13, Color.rgb(207, 219, 239), false));
                 });
             }
         }));
+    }
+
+    private void addCandidate(String pageUrl, String mediaUrl, String kind) {
+        candidateCount++;
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(12), dp(10), dp(12), dp(10));
+        card.setBackgroundColor(Color.rgb(16, 27, 48));
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(-1, -2);
+        cardParams.bottomMargin = dp(10);
+
+        card.addView(text("MEDIA " + candidateCount + " • " + kind, 12,
+                Color.rgb(77, 218, 255), true));
+        TextView url = text(mediaUrl, 13, Color.WHITE, false);
+        url.setTextIsSelectable(true);
+        LinearLayout.LayoutParams urlParams = new LinearLayout.LayoutParams(-1, -2);
+        urlParams.topMargin = dp(5);
+        card.addView(url, urlParams);
+        TextView source = text("Source page: " + pageUrl, 11,
+                Color.rgb(171, 185, 211), false);
+        LinearLayout.LayoutParams sourceParams = new LinearLayout.LayoutParams(-1, -2);
+        sourceParams.topMargin = dp(5);
+        card.addView(source, sourceParams);
+
+        Button play = button("▶  Play in SaifNest");
+        LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(-1, -2);
+        playParams.topMargin = dp(5);
+        play.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, PlayerActivity.class);
+            intent.setData(Uri.parse("saifnest://play?url=" + Uri.encode(mediaUrl)));
+            startActivity(intent);
+        });
+        card.addView(play, playParams);
+        resultsList.addView(card, cardParams);
     }
 
     @Override protected void onDestroy() {
