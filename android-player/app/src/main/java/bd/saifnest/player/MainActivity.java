@@ -170,6 +170,8 @@ public final class MainActivity extends Activity {
 
         scanButton = button("⌕   Find media", true);
         searchPanel.addView(scanButton, params(-1, dp(50), 10));
+        Button browseButton = button("Open in browser · detect media", false);
+        searchPanel.addView(browseButton, params(-1, dp(44), 8));
         Button stop = button("Stop scan", false);
         searchPanel.addView(stop, params(-1, dp(44), 8));
 
@@ -230,6 +232,17 @@ public final class MainActivity extends Activity {
             countView.setText("  •  Website scan");
         });
         scanButton.setOnClickListener(v -> startScan());
+        browseButton.setOnClickListener(v -> {
+            String value = urlInput.getText().toString().trim();
+            Uri uri = Uri.parse(value);
+            if (uri.getHost() == null || !("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))) {
+                urlInput.setError("Enter a valid HTTP(S) URL");
+                return;
+            }
+            Intent browser = new Intent(MainActivity.this, BrowserActivity.class);
+            browser.putExtra("url", value);
+            startActivity(browser);
+        });
         stop.setOnClickListener(v -> {
             scanGeneration++;
             if (scanner != null) scanner.cancel();
