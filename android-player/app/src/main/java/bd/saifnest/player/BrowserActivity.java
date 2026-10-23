@@ -143,6 +143,7 @@ public final class BrowserActivity extends Activity {
         });
 
         buildTopBar();
+        buildAddressBar();
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progress.setMax(100); progress.setProgressTintList(android.content.res.ColorStateList.valueOf(CYAN));
         progress.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(SURFACE));
@@ -170,7 +171,8 @@ public final class BrowserActivity extends Activity {
         topBar.addView(brand, margin(dp(42), dp(42), 0, 0, 10, 0));
 
         LinearLayout titleStack = column();
-        titleStack.addView(text("SaifNest", 18, WHITE, true));
+        pageTitle = text("SaifNest", 18, WHITE, true);
+        titleStack.addView(pageTitle);
         TextView subtitle = text("PRIVATE • FAST • MEDIA", 9, MUTED, true);
         LinearLayout.LayoutParams subP = lp(-2, -2); subP.topMargin = dp(1); titleStack.addView(subtitle, subP);
         topBar.addView(titleStack, new LinearLayout.LayoutParams(0, -2, 1));
