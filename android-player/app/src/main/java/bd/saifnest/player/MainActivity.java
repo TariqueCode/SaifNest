@@ -50,7 +50,7 @@ public final class MainActivity extends Activity {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
-    private GradientDrawable shape(int color, int radiusDp, int strokeColor) {
+    private int getStatusBarInset() {\n        int id = getResources().getIdentifier("status_bar_height", "dimen", "android");\n        return id > 0 ? getResources().getDimensionPixelSize(id) : dp(24);\n    }\n\n    private int getNavigationInset() {\n        int id = getResources().getIdentifier("navigation_bar_height", "dimen", "android");\n        return id > 0 ? getResources().getDimensionPixelSize(id) : dp(0);\n    }\n\n    private GradientDrawable shape(int color, int radiusDp, int strokeColor) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
         d.setCornerRadius(dp(radiusDp));
@@ -105,7 +105,7 @@ public final class MainActivity extends Activity {
 
         LinearLayout root = column();
         root.setBackgroundColor(BG);
-        root.setPadding(dp(20), dp(14), dp(20), dp(8));
+        root.setPadding(dp(20), getStatusBarInset() + dp(10), dp(20), getNavigationInset() + dp(8));
 
         LinearLayout brandRow = new LinearLayout(this);
         brandRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
