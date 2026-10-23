@@ -130,13 +130,6 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams brandP = new LinearLayout.LayoutParams(-2, -2);
         brandP.leftMargin = dp(10);
         brandRow.addView(brand, brandP);
-        TextView nativeLabel = text("NATIVE MEDIA", 10, MUTED, true);
-        nativeLabel.setGravity(android.view.Gravity.CENTER);
-        nativeLabel.setPadding(dp(9), dp(6), dp(9), dp(6));
-        nativeLabel.setBackground(shape(PANEL, 20, Color.rgb(38, 55, 82)));
-        LinearLayout.LayoutParams badgeP = new LinearLayout.LayoutParams(-2, -2);
-        badgeP.leftMargin = dp(8);
-        brandRow.addView(nativeLabel, badgeP);
         root.addView(brandRow);
 
         TextView headline = text("Your media,\none place.", 30, WHITE, true);
